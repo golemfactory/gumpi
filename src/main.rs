@@ -2,6 +2,8 @@ extern crate clap;
 extern crate failure;
 extern crate reqwest;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 
 #[macro_use]
@@ -12,7 +14,7 @@ mod backend;
 mod session;
 use crate::session::SessionMan;
 
-use failure::Fallible;
+use failure::{Fallible, ResultExt};
 use std::env;
 
 fn main() {
@@ -39,13 +41,14 @@ fn run() -> Fallible<()> {
     let _progname = matches.value_of("progname").unwrap();
     let _numproc = matches.value_of("numproc").unwrap();
 
-    let mut mgr = SessionMan::new("127.0.0.1:61621".to_owned());
+    let mut mgr = SessionMan::new("127.0.0.1:61621".to_owned(), "127.0.0.1:61622".to_owned());
     info!("Creating session");
-    mgr.create()?;
+    mgr.create().context("During create")?;
 
-    mgr.exec("echo", &["foo"])?;
+    mgr.exec("echo", &["foo"]).context("during exec")?;
+    println!("{:?}", mgr.get_providers().context("during get_providers")?);
 
     info!("Destroying session");
-    mgr.destroy()?;
+    mgr.destroy().context("during destroy")?;
     Ok(())
 }
