@@ -37,17 +37,17 @@ fn init_logger() {
 
 fn run() -> Fallible<()> {
     let matches = args::get_parser().get_matches();
-    let _progname = matches.value_of("progname").unwrap();
-    let _numproc = matches.value_of("numproc").unwrap();
+    let progname = matches.value_of("progname").unwrap().to_owned();
+    let numproc: u32 = matches.value_of("numproc").unwrap().parse()?;
 
     let mut mgr = SessionMan::new("127.0.0.1:61621".to_owned(), "127.0.0.1:61622".to_owned());
     info!("Creating session");
     mgr.create().context("During create")?;
 
-    mgr.exec("echo", &["foo"]).context("during exec")?;
+    let mpimgr = SessionMPI::new(&mgr, progname);
+    //mpimgr.make()?;
+    mpimgr.run(numproc, &["foo"])?;
     println!("{:?}", mgr.get_providers().context("during get_providers")?);
 
-    info!("Destroying session");
-    mgr.destroy().context("during destroy")?;
     Ok(())
 }

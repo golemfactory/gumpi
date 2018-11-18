@@ -21,6 +21,12 @@ pub struct PeerInfo {
     // pub tags: Vec<String>,
 }
 
+impl Drop for SessionMan {
+    fn drop(&mut self) {
+        self.destroy().expect("Destroying the session failed");
+    }
+}
+
 impl SessionMan {
     pub fn new(root_provider_ip: String, hub_ip: String) -> Self {
         SessionMan {
