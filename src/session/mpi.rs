@@ -35,4 +35,16 @@ impl<'a> SessionMPI<'a> {
         let mpiargs = [&["-n", &npstr, &self.progname], args].concat();
         self.mgr.exec("mpirun", &mpiargs)
     }
+
+    fn hostfile(&self) -> Fallible<()> {
+        let peers = self.mgr.get_providers()?;
+        for peer in peers {
+            // TODO detect slots
+            // TODO depend on number of procs?
+            if let Some(addr) = peer.peer_addr {
+                let line = format!("{} port=4222 slots=1", addr);
+            }
+        }
+        Ok(())
+    }
 }
