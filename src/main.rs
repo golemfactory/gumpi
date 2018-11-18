@@ -10,9 +10,8 @@ extern crate serde_json;
 extern crate log;
 
 mod args;
-mod backend;
 mod session;
-use crate::session::SessionMan;
+use crate::session::{mpi::SessionMPI, SessionMan};
 
 use failure::{Fallible, ResultExt};
 use std::env;

@@ -2,6 +2,8 @@ use failure::{format_err, Fallible, ResultExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+pub mod mpi;
+
 pub struct SessionMan {
     provider_ip: String,
     hub_ip: String,
