@@ -4,22 +4,14 @@ use serde_json::json;
 use std::net::SocketAddr;
 
 pub mod mpi;
+mod gu_struct;
+
+use self::gu_struct::*;
 
 pub struct SessionMan {
     provider_ip: SocketAddr,
     hub_ip: SocketAddr,
     session_id: Option<String>,
-}
-
-// TODO use submodule from gu-net
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct PeerInfo {
-    pub node_name: String,
-    pub peer_addr: Option<String>,
-    // pub node_id: NodeId,
-    // pub sessions: Vec<PeerSessionInfo>,
-    // pub tags: Vec<String>,
 }
 
 impl Drop for SessionMan {
@@ -70,7 +62,8 @@ impl SessionMan {
         Ok(())
     }
 
-    pub fn destroy(&mut self) -> Fallible<()> {
+    /// this method is private, destruction is a part of RAII
+    fn destroy(&mut self) -> Fallible<()> {
         let id = 40;
         let payload = json!({
             "session_id": self.session_id
@@ -105,6 +98,14 @@ impl SessionMan {
         let info = reply.json()?;
         Ok(info)
     }
+
+    /*pub fn provider_hwinfo(&self, provider_addr: SocketAddr) {
+        let id = 19354;
+        let payload = json!({
+            "b": null
+        });
+        let reply: Hardware = self.post_provider(id: u32, json: T)
+    }*/
 
     /*pub fn new_session(ip: String) -> Self {
         let mgr = Self::new(ip);
