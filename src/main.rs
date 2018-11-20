@@ -1,21 +1,26 @@
-extern crate clap;
 extern crate failure;
 extern crate reqwest;
 extern crate serde;
+extern crate structopt;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate toml;
 
 #[macro_use]
 extern crate log;
 
-mod args;
+mod jobconfig;
 mod session;
 
-use crate::session::{mpi::SessionMPI, SessionMan};
-use std::net::SocketAddr;
+use crate::{
+    jobconfig::{JobConfig, Opt},
+    session::{mpi::SessionMPI, SessionMan},
+};
 use failure::{Fallible, ResultExt};
 use std::env;
+use std::net::SocketAddr;
+use structopt::StructOpt;
 
 fn main() {
     init_logger();
@@ -37,19 +42,17 @@ fn init_logger() {
 }
 
 fn run() -> Fallible<()> {
-    let matches = args::get_parser().get_matches();
-    let progname = matches.value_of("progname").unwrap().to_owned();
-    let numproc: u32 = matches.value_of("numproc").unwrap().parse()?;
+    let opt = Opt::from_args();
+    let config = JobConfig::from_file(&opt.jobconfig)?;
 
     let prov_ip: SocketAddr = "127.0.0.1:61621".parse().unwrap();
-    let hub_ip : SocketAddr = "127.0.0.1:61622".parse().unwrap();
-    let mut mgr = SessionMan::new(prov_ip, hub_ip);
+    let mut mgr = SessionMan::new(prov_ip, opt.hub);
     info!("Creating session");
     mgr.create().context("During create")?;
 
-    let mpimgr = SessionMPI::new(&mgr, progname);
+    let mpimgr = SessionMPI::new(&mgr, config.progname);
     //mpimgr.make()?;
-    mpimgr.run(numproc, &["foo"])?;
+    mpimgr.run(opt.numproc, &["foo"])?;
     println!("{:?}", mgr.get_providers().context("during get_providers")?);
     println!("{}", mpimgr.hostfile()?);
 
