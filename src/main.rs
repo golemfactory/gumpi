@@ -11,8 +11,9 @@ extern crate log;
 
 mod args;
 mod session;
-use crate::session::{mpi::SessionMPI, SessionMan};
 
+use crate::session::{mpi::SessionMPI, SessionMan};
+use std::net::SocketAddr;
 use failure::{Fallible, ResultExt};
 use std::env;
 
@@ -40,7 +41,9 @@ fn run() -> Fallible<()> {
     let progname = matches.value_of("progname").unwrap().to_owned();
     let numproc: u32 = matches.value_of("numproc").unwrap().parse()?;
 
-    let mut mgr = SessionMan::new("127.0.0.1:61621".to_owned(), "127.0.0.1:61622".to_owned());
+    let prov_ip: SocketAddr = "127.0.0.1:61621".parse().unwrap();
+    let hub_ip : SocketAddr = "127.0.0.1:61622".parse().unwrap();
+    let mut mgr = SessionMan::new(prov_ip, hub_ip);
     info!("Creating session");
     mgr.create().context("During create")?;
 

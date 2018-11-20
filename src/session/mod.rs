@@ -1,12 +1,13 @@
 use failure::{format_err, Fallible, ResultExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::net::SocketAddr;
 
 pub mod mpi;
 
 pub struct SessionMan {
-    provider_ip: String,
-    hub_ip: String,
+    provider_ip: SocketAddr,
+    hub_ip: SocketAddr,
     session_id: Option<String>,
 }
 
@@ -28,7 +29,7 @@ impl Drop for SessionMan {
 }
 
 impl SessionMan {
-    pub fn new(root_provider_ip: String, hub_ip: String) -> Self {
+    pub fn new(root_provider_ip: SocketAddr, hub_ip: SocketAddr) -> Self {
         SessionMan {
             provider_ip: root_provider_ip,
             hub_ip,
