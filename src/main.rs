@@ -48,6 +48,7 @@ fn run() -> Fallible<()> {
     //mpimgr.make()?;
     mpimgr.run(numproc, &["foo"])?;
     println!("{:?}", mgr.get_providers().context("during get_providers")?);
+    println!("{}", mpimgr.hostfile()?);
 
     Ok(())
 }
