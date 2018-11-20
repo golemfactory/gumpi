@@ -24,5 +24,5 @@ pub struct Hardware {
     os: Option<OsType>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hostname: Option<String>,*/
-    num_cores: usize,
+    pub num_cores: usize,
 }

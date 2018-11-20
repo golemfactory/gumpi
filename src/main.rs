@@ -48,17 +48,19 @@ fn run() -> Fallible<()> {
 
     let prov_ip: SocketAddr = "127.0.0.1:61621".parse().unwrap();
     let mut mgr = SessionMan::new(prov_ip, opt.hub);
-    info!("Creating session");
-    mgr.create().context("During create")?;
-
-    let mpimgr = SessionMPI::new(&mgr, config.progname);
-    //mpimgr.make()?;
-    mpimgr.run(opt.numproc, &["foo"])?;
-    println!(
-        "providers {:?}",
-        mgr.get_providers().context("during get_providers")?
-    );
-    println!("{}", mpimgr.hostfile()?);
-
+    let providers = mgr.get_provider_info();
+    println!("{:?}", providers);
+    /*   info!("Creating session");
+        mgr.create().context("During create")?;
+    
+        let mpimgr = SessionMPI::new(&mgr, config.progname);
+        //mpimgr.make()?;
+        mpimgr.run(opt.numproc, &["foo"])?;
+        println!(
+            "providers {:?}",
+            mgr.get_providers().context("during get_providers")?
+        );
+        println!("{}", mpimgr.hostfile()?);
+    */
     Ok(())
 }
