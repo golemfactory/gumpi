@@ -4,6 +4,7 @@ extern crate serde;
 extern crate structopt;
 #[macro_use]
 extern crate serde_derive;
+extern crate gu_net;
 extern crate serde_json;
 extern crate toml;
 
@@ -53,7 +54,10 @@ fn run() -> Fallible<()> {
     let mpimgr = SessionMPI::new(&mgr, config.progname);
     //mpimgr.make()?;
     mpimgr.run(opt.numproc, &["foo"])?;
-    println!("{:?}", mgr.get_providers().context("during get_providers")?);
+    println!(
+        "providers {:?}",
+        mgr.get_providers().context("during get_providers")?
+    );
     println!("{}", mpimgr.hostfile()?);
 
     Ok(())

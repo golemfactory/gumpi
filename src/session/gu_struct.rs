@@ -1,12 +1,13 @@
 // structs copied over from gu-net, gu-hardware
 // TODO use submodule and gu-envman-api
+use gu_net::NodeId;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PeerInfo {
     pub node_name: String,
     pub peer_addr: Option<String>,
-    // pub node_id: NodeId,
+    pub node_id: NodeId,
     // pub sessions: Vec<PeerSessionInfo>,
     // pub tags: Vec<String>,
 }

@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::net::SocketAddr;
 
-pub mod mpi;
 mod gu_struct;
+pub mod mpi;
 
 use self::gu_struct::*;
 
