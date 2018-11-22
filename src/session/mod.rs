@@ -9,10 +9,14 @@ pub mod mpi;
 use self::gu_struct::*;
 use gu_net::NodeId;
 
+struct Session {
+    session_id: String,
+    node_id: NodeId,
+}
+
 pub struct SessionMan {
-    provider_ip: SocketAddr,
     hub_ip: SocketAddr,
-    session_id: Option<String>,
+    session: Option<Session>,
 }
 
 #[derive(Debug)]
@@ -22,22 +26,21 @@ pub struct Provider {
     cpus: usize,
 }
 
-/*impl Drop for SessionMan {
+impl Drop for SessionMan {
     fn drop(&mut self) {
         self.destroy().expect("Destroying the session failed");
     }
-}*/
+}
 
 impl SessionMan {
-    pub fn new(root_provider_ip: SocketAddr, hub_ip: SocketAddr) -> Self {
+    pub fn new(hub_ip: SocketAddr) -> Self {
         SessionMan {
-            provider_ip: root_provider_ip,
             hub_ip,
-            session_id: None,
+            session: None,
         }
     }
 
-    fn post_provider<T, U>(&self, provider: NodeId, service: u32, json: T) -> Fallible<U>
+    fn post_provider<T, U>(&self, provider: &NodeId, service: u32, json: T) -> Fallible<U>
     where
         T: Serialize,
         for<'a> U: Deserialize<'a>,
@@ -56,8 +59,8 @@ impl SessionMan {
         resp_content.map_err(|e| format_err!("Provider replied: {:?}", e))
     }
 
-    /*pub fn create(&mut self) -> Fallible<()> {
-        let id = 37;
+    pub fn create(&mut self, node: NodeId) -> Fallible<()> {
+        let service = 37;
         let payload = json!({
             "image": {
                 "url": "http://52.31.143.91/images/monero-linux.tar.gz",
@@ -68,27 +71,39 @@ impl SessionMan {
             "note": "None",
             "envType": "hd"
         });
-    
-        let session_id: String = self.post_provider(id, payload).context("POST request")?;
+
+        let session_id: String = self
+            .post_provider(&node, service, payload)
+            .context("POST request")?;
         info!("Session id: {}", session_id);
-        self.session_id = Some(session_id);
-        Ok(())
-    }
-    
-    /// this method is private, destruction is a part of RAII
-    fn destroy(&mut self) -> Fallible<()> {
-        let id = 40;
-        let payload = json!({
-            "session_id": self.session_id
+        self.session = Some(Session {
+            session_id,
+            node_id: node, // TODO find a way to use a reference without explicit lifetimeing
         });
-    
-        let reply: String = self.post_provider(id, payload).context("POST request")?;
-        info!("Reply: {}", reply);
-        self.session_id = None;
         Ok(())
     }
-    
-    pub fn exec(&self, executable: &str, args: &[&str]) -> Fallible<()> {
+
+    /// this method is private, destruction is a part of RAII
+    /// if no session has been established, this is a no-op
+    fn destroy(&mut self) -> Fallible<()> {
+        let service = 40;
+
+        if let Some(ref session) = self.session {
+            let payload = json!({
+                "session_id": session.session_id
+            });
+
+            let reply: String = self
+                .post_provider(&session.node_id, service, payload)
+                .context("POST request")?;
+            info!("Reply: {}", reply);
+            self.session = None;
+        }
+
+        Ok(())
+    }
+
+    /*pub fn exec(&self, executable: &str, args: &[&str]) -> Fallible<()> {
         let id = 38;
         let payload = json!({
             "sessionId": self.session_id,
@@ -121,9 +136,10 @@ impl SessionMan {
                 let service = 19354;
                 let payload = json!({ "b": null });
 
-                let hw = self.post_provider(id, service, payload);
+                let hw = self.post_provider(&id, service, payload);
                 let hw: Hardware = hw.context(format!("POST to {}", id.to_string()))?;
 
+                // TODO handle peers without an IP
                 let ip_port: SocketAddr = info.peer_addr.unwrap().parse().unwrap();
 
                 Ok(Provider {

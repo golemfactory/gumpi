@@ -1,24 +1,33 @@
 // use crate::failure_ext::OptionExt;
-use crate::session::SessionMan;
+use crate::session::{Provider, SessionMan};
 use failure::{Fallible, ResultExt};
-use std::net::SocketAddr;
 use std::path::PathBuf;
 
 pub struct SessionMPI<'a> {
-    mgr: &'a SessionMan,
+    mgr: &'a mut SessionMan,
     progname: String,
     progdir: PathBuf,
+    providers: Vec<Provider>,
 }
 
 impl<'a> SessionMPI<'a> {
-    pub fn new(mgr: &'a SessionMan, progname: String) -> Self {
+    pub fn new(
+        mgr: &'a mut SessionMan,
+        progname: String,
+        providers: Vec<Provider>,
+    ) -> Fallible<Self> {
         let home = dirs::home_dir().expect("Unable to get the home dir");
         let progdir = home.join("pub").join(&progname);
-        SessionMPI {
+        // TODO check if providers is not empty
+        let root = &providers[0];
+        mgr.create(root.id).context("creating the session failed")?;
+
+        Ok(SessionMPI {
             mgr,
             progname,
             progdir,
-        }
+            providers,
+        })
     }
 
     /*pub fn make(&self) -> Fallible<()> {
@@ -38,19 +47,12 @@ impl<'a> SessionMPI<'a> {
     }*/
 
     pub fn hostfile(&self) -> Fallible<String> {
-        let peers = self.mgr.get_providers()?;
+        let peers = &self.providers;
         let file_lines: Vec<_> = peers
             .iter()
-            .filter_map(|peer| {
-                // TODO detect slots
+            .map(|peer| {
                 // TODO depend on number of procs?
-                if let Some(ref addr) = peer.peer_addr {
-                    let addr: SocketAddr = addr.parse().expect("Invalid IP address");
-                    let line = format!("{} port=4222 slots=1", addr.ip());
-                    Some(line)
-                } else {
-                    None
-                }
+                format!("{} port=4222 slots={}", peer.ip, peer.cpus)
             })
             .collect();
         Ok(file_lines.join("\n"))

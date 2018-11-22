@@ -18,9 +18,8 @@ use crate::{
     jobconfig::{JobConfig, Opt},
     session::{mpi::SessionMPI, SessionMan},
 };
-use failure::{Fallible, ResultExt};
+use failure::{format_err, Fallible, ResultExt};
 use std::env;
-use std::net::SocketAddr;
 use structopt::StructOpt;
 
 fn main() {
@@ -44,12 +43,21 @@ fn init_logger() {
 
 fn run() -> Fallible<()> {
     let opt = Opt::from_args();
-    let config = JobConfig::from_file(&opt.jobconfig)?;
+    let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
-    let prov_ip: SocketAddr = "127.0.0.1:61621".parse().unwrap();
-    let mut mgr = SessionMan::new(prov_ip, opt.hub);
-    let providers = mgr.get_provider_info();
-    println!("{:?}", providers);
+    let mut mgr = SessionMan::new(opt.hub);
+    let providers = mgr.get_provider_info().context("getting provider info")?;
+    println!("PROVIDERS:");
+    for p in &providers {
+        println!("{:?}", p);
+    }
+    if providers.is_empty() {
+        return Err(format_err!("No providers available"));
+    }
+
+    let mpi_sess = SessionMPI::new(&mut mgr, config.progname, providers)?;
+    println!("HOSTFILE:\n{}", mpi_sess.hostfile()?);
+
     /*   info!("Creating session");
         mgr.create().context("During create")?;
     
