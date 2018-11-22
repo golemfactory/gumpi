@@ -1,5 +1,5 @@
 use failure::{format_err, Fallible, ResultExt};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
 
@@ -44,7 +44,7 @@ impl SessionMan {
         &self,
         provider: &NodeId,
         service: u32,
-        json: serde_json::Value,
+        json: &serde_json::Value,
     ) -> Fallible<U>
     where
         for<'a> U: Deserialize<'a>,
@@ -78,7 +78,7 @@ impl SessionMan {
         });
 
         let session_id: String = self
-            .post_provider(&node, service, payload)
+            .post_provider(&node, service, &payload)
             .context("POST request")?;
         info!("Session id: {}", session_id);
         self.session = Some(Session {
@@ -99,7 +99,7 @@ impl SessionMan {
             });
 
             let reply: String = self
-                .post_provider(&session.node_id, service, payload)
+                .post_provider(&session.node_id, service, &payload)
                 .context("POST request")?;
             info!("Reply: {}", reply);
             self.session = None;
@@ -141,7 +141,7 @@ impl SessionMan {
                 let service = 19354;
                 let payload = json!(null);
 
-                let hw = self.post_provider(&id, service, payload);
+                let hw = self.post_provider(&id, service, &payload);
                 let hw: Hardware = hw.context(format!("POST to {}", id.to_string()))?;
 
                 // TODO handle peers without an IP
