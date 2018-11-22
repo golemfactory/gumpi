@@ -40,9 +40,13 @@ impl SessionMan {
         }
     }
 
-    fn post_provider<T, U>(&self, provider: &NodeId, service: u32, json: T) -> Fallible<U>
+    fn post_provider<U>(
+        &self,
+        provider: &NodeId,
+        service: u32,
+        json: serde_json::Value,
+    ) -> Fallible<U>
     where
-        T: Serialize,
         for<'a> U: Deserialize<'a>,
     {
         let client = reqwest::Client::new();
@@ -52,7 +56,8 @@ impl SessionMan {
             provider.to_string(),
             service
         );
-        let mut resp = client.post(&url).json(&json).send()?;
+        let payload = json!({ "b": json });
+        let mut resp = client.post(&url).json(&payload).send()?;
         let content = resp.text().unwrap();
         info!("Got reply: {}", content);
         let resp_content: Result<U, String> = serde_json::from_str(&content).context("Bad JSON")?;
@@ -134,7 +139,7 @@ impl SessionMan {
             .map(|info| -> Fallible<Provider> {
                 let id = info.node_id;
                 let service = 19354;
-                let payload = json!({ "b": null });
+                let payload = json!(null);
 
                 let hw = self.post_provider(&id, service, payload);
                 let hw: Hardware = hw.context(format!("POST to {}", id.to_string()))?;
