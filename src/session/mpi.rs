@@ -35,16 +35,11 @@ impl<'a> SessionMPI<'a> {
         self.mgr.exec("make", &["-C", progdir])
     }*/
 
-    /*pub fn run(&self, nproc: u32, args: &[&str]) -> Fallible<()> {
-        let progpath = self
-            .progdir
-            .join(&self.progname)
-            .to_str()
-            .expect("progpath is invalid utf8");
+    pub fn exec(&self, nproc: u32, args: &[&str]) -> Fallible<()> {
         let npstr = nproc.to_string();
         let mpiargs = [&["-n", &npstr, &self.progname], args].concat();
         self.mgr.exec("mpirun", &mpiargs)
-    }*/
+    }
 
     pub fn hostfile(&self) -> Fallible<String> {
         let peers = &self.providers;
