@@ -1,5 +1,6 @@
 extern crate gu_envman_api;
 
+use crate::failure_ext::OptionExt;
 use failure::{format_err, Fallible, ResultExt};
 use serde::Deserialize;
 use serde_json::json;
@@ -11,14 +12,19 @@ pub mod mpi;
 use self::gu_struct::*;
 use gu_net::NodeId;
 
-struct Session {
+struct ProviderSession {
     session_id: String,
     node_id: NodeId,
 }
 
+struct HubSession {
+    session_id: String,
+}
+
 pub struct SessionMan {
     hub_ip: SocketAddr,
-    session: Option<Session>,
+    provider_session: Option<ProviderSession>,
+    hub_session: Option<HubSession>,
 }
 
 #[derive(Debug)]
@@ -38,7 +44,8 @@ impl SessionMan {
     pub fn new(hub_ip: SocketAddr) -> Self {
         SessionMan {
             hub_ip,
-            session: None,
+            provider_session: None,
+            hub_session: None,
         }
     }
 
@@ -66,7 +73,14 @@ impl SessionMan {
         resp_content.map_err(|e| format_err!("Provider replied: {:?}", e))
     }
 
-    pub fn create(&mut self, node: NodeId) -> Fallible<()> {
+    fn upload(&self) -> Fallible<()> {
+        let session = self.get_hub_session()?;
+        let url = format!("http://{}/session/{}/blob", self.hub_ip, session.session_id);
+        let client = reqwest::Client::new();
+        Ok(())
+    }
+
+    pub fn session_provider(&mut self, node: NodeId) -> Fallible<()> {
         let service = 37;
         let payload = json!({
             "image": {
@@ -83,19 +97,26 @@ impl SessionMan {
             .post_provider(node, service, &payload)
             .context("POST request")?;
         info!("Session id: {}", session_id);
-        self.session = Some(Session {
+        self.provider_session = Some(ProviderSession {
             session_id,
             node_id: node, // TODO find a way to use a reference without explicit lifetimeing
         });
         Ok(())
     }
 
+    /*pub fn session_hub(&mut self) {
+        let payload = CreateSession {
+            name: "gumpi".to_owned(),
+            environment: "hd".to_owned()
+        }
+    }*/
+
     /// this method is private, destruction is a part of RAII
     /// if no session has been established, this is a no-op
     fn destroy(&mut self) -> Fallible<()> {
         let service = 40;
 
-        if let Some(ref session) = self.session {
+        if let Some(ref session) = self.provider_session {
             let payload = json!({
                 "session_id": session.session_id
             });
@@ -104,33 +125,46 @@ impl SessionMan {
                 .post_provider(session.node_id, service, &payload)
                 .context("POST request")?;
             info!("Reply: {}", reply);
-            self.session = None;
+            self.provider_session = None;
         }
 
         Ok(())
     }
 
+    fn get_provider_session(&self) -> Fallible<&ProviderSession> {
+        let session = self
+            .provider_session
+            .as_ref()
+            .context("Provider not initialized")?;
+        Ok(session)
+    }
+
+    fn get_hub_session(&self) -> Fallible<&HubSession> {
+        let session = self
+            .hub_session
+            .as_ref()
+            .context("Provider not initialized")?;
+        Ok(session)
+    }
+
     pub fn exec(&self, executable: &str, args: &[&str]) -> Fallible<()> {
-        if let Some(ref session) = self.session {
-            let service = 38;
-            let payload = json!({
-                "sessionId": session.session_id,
-                "commands": [{
-                    "exec": {
-                        "executable": executable,
-                        "args": args
-                    }
-                }]
-            });
-            info!("Payload is:\n{}", payload);
-            let reply: Vec<String> = self
-                .post_provider(session.node_id, service, &payload)
-                .context("POST request")?;
-            println!("Output:\n{:?}", reply);
-            Ok(())
-        } else {
-            Err(format_err!("Session not initialized"))
-        }
+        let session = self.get_provider_session()?;
+        let service = 38;
+        let payload = json!({
+            "sessionId": session.session_id,
+            "commands": [{
+                "exec": {
+                    "executable": executable,
+                    "args": args
+                }
+            }]
+        });
+        info!("Payload is:\n{}", payload);
+        let reply: Vec<String> = self
+            .post_provider(session.node_id, service, &payload)
+            .context("POST request")?;
+        println!("Output:\n{:?}", reply);
+        Ok(())
     }
 
     fn get_providers(&self) -> Fallible<Vec<PeerInfo>> {

@@ -13,6 +13,7 @@ extern crate log;
 
 mod jobconfig;
 mod session;
+mod failure_ext;
 
 use crate::{
     jobconfig::{JobConfig, Opt},
@@ -62,7 +63,7 @@ fn run() -> Fallible<()> {
 
     /*   info!("Creating session");
         mgr.create().context("During create")?;
-    
+
         let mpimgr = SessionMPI::new(&mgr, config.progname);
         //mpimgr.make()?;
         mpimgr.run(opt.numproc, &["foo"])?;

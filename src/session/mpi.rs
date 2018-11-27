@@ -20,7 +20,8 @@ impl<'a> SessionMPI<'a> {
         let progdir = home.join("pub").join(&progname);
         // TODO check if providers is not empty
         let root = &providers[0];
-        mgr.create(root.id).context("creating the session failed")?;
+        mgr.session_provider(root.id)
+            .context("creating the session failed")?;
 
         Ok(SessionMPI {
             mgr,
