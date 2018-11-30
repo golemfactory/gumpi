@@ -36,7 +36,10 @@ pub struct Provider {
 
 impl Drop for SessionMan {
     fn drop(&mut self) {
-        self.destroy().expect("Destroying the session failed");
+        self.destroy()
+            .expect("Destroying the provider session failed");
+        self.destroy_hub_session()
+            .expect("Destroying the hub session failed");
     }
 }
 
@@ -104,6 +107,21 @@ impl SessionMan {
         let session_id: u64 = post_deserialize(url, payload)?;
         let session = HubSession { session_id };
         Ok(session)
+    }
+
+    fn destroy_hub_session(&self) -> Fallible<()> {
+        let url = format!(
+            "http://{}/sessions/{}",
+            self.hub_ip, self.hub_session.session_id
+        );
+        let client = reqwest::Client::new();
+        let mut reply: reqwest::Response = client
+            .delete(&url)
+            .send()
+            .context("Closing the hub session")?;
+        let content = reply.text().expect("Invalid reply");
+        info!("Reply: {}", content);
+        Ok(())
     }
 
     pub fn init_provider_session(&mut self, node: NodeId) -> Fallible<()> {
