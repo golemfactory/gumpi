@@ -39,6 +39,8 @@ impl<'a> SessionMPI<'a> {
     pub fn exec(&self, nproc: u32, args: &[&str]) -> Fallible<()> {
         let npstr = nproc.to_string();
         let mpiargs = [&["-n", &npstr, &self.progname], args].concat();
+        let hostfile = self.hostfile()?;
+        let blob_id = self.mgr.upload(&hostfile)?;
         self.mgr.exec("mpirun", &mpiargs)
     }
 

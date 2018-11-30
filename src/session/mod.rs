@@ -44,15 +44,26 @@ impl Drop for SessionMan {
     }
 }
 
-fn query_deserialize<T, U>(method: reqwest::Method, url: String, payload: T) -> Fallible<U>
+fn query_deserialize<T, U>(method: reqwest::Method, url: &str, payload: T) -> Fallible<U>
 where
     T: Serialize,
     for<'a> U: Deserialize<'a>,
 {
     let client = reqwest::Client::new();
-    let mut resp = client.request(method, &url).json(&payload).send()?;
-    let content = resp.text().unwrap();
-    info!("Got reply: {}", content);
+    let mut resp = client.request(method, url).json(&payload).send()?;
+    if !resp.status().is_success() {
+        return Err(format_err!(
+            "Querying URL {} returned an error: {}",
+            url,
+            resp.status()
+        ));
+    }
+    let mut content = resp.text().unwrap();
+    info!("Got reply from {}: {:?}", url, content);
+    if content == "" {
+        // nasty hack
+        content = serde_json::to_string(&()).unwrap();
+    }
     let resp_content: U = serde_json::from_str(&content).context("Bad JSON")?;
     Ok(resp_content)
 }
@@ -87,35 +98,46 @@ impl SessionMan {
         // side, but the HTTP request succeeded.
         // Still, if there was an error on the provider side, we want to
         // propagate the error, hence the map_err.
-        let reply: Result<U, String> = query_deserialize(Method::POST, url, payload)?;
+        let reply: Result<U, String> = query_deserialize(Method::POST, &url, payload)?;
         reply.map_err(|err| format_err!("Provider replied: {}", err))
     }
 
-    /*fn upload(&self) -> Fallible<()> {
-        let session = self.get_hub_session()?;
-        let url = format!("http://{}/session/{}/blob", self.hub_ip, session.session_id);
-        let client = reqwest::Client::new();
-        Ok(())
-    }*/
+    /// Returns: blob id
+    pub fn upload<T: Serialize>(&self, payload: &T) -> Fallible<u64> {
+        info!("Creating a slot");
+        let session = &self.hub_session;
+        let url = format!(
+            "http://{}/sessions/{}/blob",
+            self.hub_ip, session.session_id
+        );
+        let blob_id: u64 = query_deserialize(Method::POST, &url, json!({}))?;
+        let url = format!("{}/{}", url, blob_id);
+        info!("Uploading a file, id = {}", blob_id);
+        let _reply: () = query_deserialize(Method::PUT, &url, payload)?;
+        info!("Uploaded a file, id = {}", blob_id);
+        Ok(blob_id)
+    }
 
     fn init_hub_session(hub_ip: SocketAddr) -> Fallible<HubSession> {
+        info!("Initializing a hub session");
         let url = format!("http://{}/sessions", hub_ip);
         let payload = SessionInfo {
             name: "gumpi".to_owned(),
             environment: "hd".to_owned(),
         };
-        let session_id: u64 = query_deserialize(Method::POST, url, payload)?;
+        let session_id: u64 = query_deserialize(Method::POST, &url, payload)?;
         let session = HubSession { session_id };
         Ok(session)
     }
 
+    #[allow(clippy::let_unit_value)]
     fn destroy_hub_session(&self) -> Fallible<()> {
         let url = format!(
             "http://{}/sessions/{}",
             self.hub_ip, self.hub_session.session_id
         );
-        let reply: String = query_deserialize(Method::DELETE, url, json!({}))?;
-        info!("Reply: {}", reply);
+        let _reply: () = query_deserialize(Method::DELETE, &url, json!({}))?;
+        //info!("Reply: {}", reply);
         Ok(())
     }
 
@@ -174,7 +196,7 @@ impl SessionMan {
         let session = self
             .provider_session
             .as_ref()
-            .context("Provider not initialized")?;
+            .ok_or_context("Provider not initialized")?;
         Ok(session)
     }
 
