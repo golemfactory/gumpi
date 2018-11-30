@@ -2,6 +2,7 @@ extern crate gu_envman_api;
 
 use crate::failure_ext::OptionExt;
 use failure::{format_err, Fallible, ResultExt};
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
@@ -36,20 +37,20 @@ pub struct Provider {
 
 impl Drop for SessionMan {
     fn drop(&mut self) {
-        self.destroy()
+        self.destroy_provider_session()
             .expect("Destroying the provider session failed");
         self.destroy_hub_session()
             .expect("Destroying the hub session failed");
     }
 }
 
-fn post_deserialize<T, U>(url: String, payload: T) -> Fallible<U>
+fn query_deserialize<T, U>(method: reqwest::Method, url: String, payload: T) -> Fallible<U>
 where
     T: Serialize,
     for<'a> U: Deserialize<'a>,
 {
     let client = reqwest::Client::new();
-    let mut resp = client.post(&url).json(&payload).send()?;
+    let mut resp = client.request(method, &url).json(&payload).send()?;
     let content = resp.text().unwrap();
     info!("Got reply: {}", content);
     let resp_content: U = serde_json::from_str(&content).context("Bad JSON")?;
@@ -86,9 +87,8 @@ impl SessionMan {
         // side, but the HTTP request succeeded.
         // Still, if there was an error on the provider side, we want to
         // propagate the error, hence the map_err.
-        let reply: Result<U, String> = post_deserialize(url, payload)?;
-        let reply = reply.map_err(|err| format_err!("Provider replied: {}", err));
-        reply
+        let reply: Result<U, String> = query_deserialize(Method::POST, url, payload)?;
+        reply.map_err(|err| format_err!("Provider replied: {}", err))
     }
 
     /*fn upload(&self) -> Fallible<()> {
@@ -104,7 +104,7 @@ impl SessionMan {
             name: "gumpi".to_owned(),
             environment: "hd".to_owned(),
         };
-        let session_id: u64 = post_deserialize(url, payload)?;
+        let session_id: u64 = query_deserialize(Method::POST, url, payload)?;
         let session = HubSession { session_id };
         Ok(session)
     }
@@ -114,13 +114,8 @@ impl SessionMan {
             "http://{}/sessions/{}",
             self.hub_ip, self.hub_session.session_id
         );
-        let client = reqwest::Client::new();
-        let mut reply: reqwest::Response = client
-            .delete(&url)
-            .send()
-            .context("Closing the hub session")?;
-        let content = reply.text().expect("Invalid reply");
-        info!("Reply: {}", content);
+        let reply: String = query_deserialize(Method::DELETE, url, json!({}))?;
+        info!("Reply: {}", reply);
         Ok(())
     }
 
@@ -157,7 +152,7 @@ impl SessionMan {
 
     /// this method is private, destruction is a part of RAII
     /// if no session has been established, this is a no-op
-    fn destroy(&mut self) -> Fallible<()> {
+    fn destroy_provider_session(&mut self) -> Fallible<()> {
         let service = 40;
 
         if let Some(ref session) = self.provider_session {

@@ -1,3 +1,4 @@
+#![warn(clippy::all)]
 extern crate failure;
 extern crate reqwest;
 extern crate serde;
