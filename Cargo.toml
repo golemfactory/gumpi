@@ -15,5 +15,5 @@ structopt = "0.2"
 dirs = "1.0"
 serde_derive = "1.0"
 toml = "0.4.8"
-gu-net = { path = "golem-unlimited/gu-net" }
-gu-envman-api = { path = "golem-unlimited/gu-envman-api" }
+gu-net = { git = "https://github.com/golemfactory/golem-unlimited" }
+gu-envman-api = { git = "https://github.com/golemfactory/golem-unlimited" }
