@@ -2,7 +2,7 @@ extern crate gu_envman_api;
 
 use crate::failure_ext::OptionExt;
 use failure::{format_err, Fallible, ResultExt};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::net::{IpAddr, SocketAddr};
 
@@ -18,13 +18,13 @@ struct ProviderSession {
 }
 
 struct HubSession {
-    session_id: String,
+    session_id: u64,
 }
 
 pub struct SessionMan {
     hub_ip: SocketAddr,
     provider_session: Option<ProviderSession>,
-    hub_session: Option<HubSession>,
+    hub_session: HubSession,
 }
 
 #[derive(Debug)]
@@ -40,13 +40,26 @@ impl Drop for SessionMan {
     }
 }
 
+fn post_deserialize<T, U>(url: String, payload: T) -> Fallible<U>
+where
+    T: Serialize,
+    for<'a> U: Deserialize<'a>,
+{
+    let client = reqwest::Client::new();
+    let mut resp = client.post(&url).json(&payload).send()?;
+    let content = resp.text().unwrap();
+    info!("Got reply: {}", content);
+    let resp_content: U = serde_json::from_str(&content).context("Bad JSON")?;
+    Ok(resp_content)
+}
+
 impl SessionMan {
-    pub fn new(hub_ip: SocketAddr) -> Self {
-        SessionMan {
+    pub fn new(hub_ip: SocketAddr) -> Fallible<Self> {
+        Ok(SessionMan {
             hub_ip,
             provider_session: None,
-            hub_session: None,
-        }
+            hub_session: Self::init_hub_session(hub_ip)?,
+        })
     }
 
     fn post_provider<U>(
@@ -58,7 +71,6 @@ impl SessionMan {
     where
         for<'a> U: Deserialize<'a>,
     {
-        let client = reqwest::Client::new();
         let url = format!(
             "http://{}/peer/send-to/{}/{}",
             self.hub_ip,
@@ -66,21 +78,35 @@ impl SessionMan {
             service
         );
         let payload = json!({ "b": json });
-        let mut resp = client.post(&url).json(&payload).send()?;
-        let content = resp.text().unwrap();
-        info!("Got reply: {}", content);
-        let resp_content: Result<U, String> = serde_json::from_str(&content).context("Bad JSON")?;
-        resp_content.map_err(|e| format_err!("Provider replied: {:?}", e))
+        // The provider actually returns a Result<U, _>.
+        // reply will be Err(_) if an error occurred on the provider
+        // side, but the HTTP request succeeded.
+        // Still, if there was an error on the provider side, we want to
+        // propagate the error, hence the map_err.
+        let reply: Result<U, String> = post_deserialize(url, payload)?;
+        let reply = reply.map_err(|err| format_err!("Provider replied: {}", err));
+        reply
     }
 
-    fn upload(&self) -> Fallible<()> {
+    /*fn upload(&self) -> Fallible<()> {
         let session = self.get_hub_session()?;
         let url = format!("http://{}/session/{}/blob", self.hub_ip, session.session_id);
         let client = reqwest::Client::new();
         Ok(())
+    }*/
+
+    fn init_hub_session(hub_ip: SocketAddr) -> Fallible<HubSession> {
+        let url = format!("http://{}/sessions", hub_ip);
+        let payload = SessionInfo {
+            name: "gumpi".to_owned(),
+            environment: "hd".to_owned(),
+        };
+        let session_id: u64 = post_deserialize(url, payload)?;
+        let session = HubSession { session_id };
+        Ok(session)
     }
 
-    pub fn session_provider(&mut self, node: NodeId) -> Fallible<()> {
+    pub fn init_provider_session(&mut self, node: NodeId) -> Fallible<()> {
         let service = 37;
         let payload = json!({
             "image": {
@@ -134,14 +160,6 @@ impl SessionMan {
     fn get_provider_session(&self) -> Fallible<&ProviderSession> {
         let session = self
             .provider_session
-            .as_ref()
-            .context("Provider not initialized")?;
-        Ok(session)
-    }
-
-    fn get_hub_session(&self) -> Fallible<&HubSession> {
-        let session = self
-            .hub_session
             .as_ref()
             .context("Provider not initialized")?;
         Ok(session)

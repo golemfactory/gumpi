@@ -26,3 +26,9 @@ pub struct Hardware {
     hostname: Option<String>,*/
     pub num_cores: usize,
 }
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct SessionInfo {
+    pub name: String,
+    pub environment: String,
+}
