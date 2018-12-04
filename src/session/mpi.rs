@@ -1,5 +1,5 @@
 // use crate::failure_ext::OptionExt;
-use crate::session::{Provider, SessionMan};
+use crate::session::{Command, Provider, SessionMan};
 use failure::{Fallible, ResultExt};
 use std::path::PathBuf;
 
@@ -36,12 +36,28 @@ impl<'a> SessionMPI<'a> {
         self.mgr.exec("make", &["-C", progdir])
     }*/
 
-    pub fn exec(&self, nproc: u32, args: &[&str]) -> Fallible<()> {
-        let npstr = nproc.to_string();
-        let mpiargs = [&["-n", &npstr, &self.progname], args].concat();
+    pub fn exec<T: Into<String>>(&self, nproc: u32, args: Vec<T>) -> Fallible<()> {
+        let args = args.into_iter().map(T::into);
+        let mut cmdline = vec!["-n".to_owned(), nproc.to_string(), self.progname.clone()];
+        cmdline.extend(args);
+
         let hostfile = self.hostfile()?;
-        let blob_id = self.mgr.upload(&hostfile)?;
-        self.mgr.exec("mpirun", &mpiargs)
+        let blob_id = self.mgr.upload(hostfile)?;
+
+        let download_cmd = Command::DownloadFile {
+            uri: format!(
+                "http://{}/sessions/{}/blob/{}",
+                self.mgr.hub_ip, self.mgr.hub_session.session_id, blob_id
+            ),
+            file_path: "hostfile".to_owned(),
+        };
+        let exec_cmd = Command::Exec {
+            executable: "mpirun".to_owned(),
+            args: cmdline,
+        };
+        let ret = self.mgr.exec_commands(vec![download_cmd, exec_cmd])?;
+        println!("Output: {:?}", ret);
+        Ok(())
     }
 
     pub fn hostfile(&self) -> Fallible<String> {

@@ -60,7 +60,7 @@ fn run() -> Fallible<()> {
     let mpi_sess = SessionMPI::new(&mut mgr, config.progname, providers)?;
     println!("HOSTFILE:\n{}", mpi_sess.hostfile()?);
 
-    mpi_sess.exec(2, &["foo"])?;
+    mpi_sess.exec(2, config.args.clone())?;
 
     /*   info!("Creating session");
         mgr.create().context("During create")?;

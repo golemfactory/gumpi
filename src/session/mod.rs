@@ -11,6 +11,8 @@ mod gu_struct;
 pub mod mpi;
 
 use self::gu_struct::*;
+pub use gu_envman_api::Command;
+use gu_envman_api::SessionUpdate;
 use gu_net::NodeId;
 
 struct ProviderSession {
@@ -50,6 +52,11 @@ where
     for<'a> U: Deserialize<'a>,
 {
     let client = reqwest::Client::new();
+    debug!(
+        "Payload:\n {}",
+        serde_json::to_string_pretty(&payload)
+            .unwrap_or_else(|_| "serialization failed".to_owned())
+    );
     let mut resp = client.request(method, url).json(&payload).send()?;
     if !resp.status().is_success() {
         return Err(format_err!(
@@ -59,12 +66,13 @@ where
         ));
     }
     let mut content = resp.text().unwrap();
-    info!("Got reply from {}: {:?}", url, content);
+    debug!("Got reply from {}: {:?}", url, content);
     if content == "" {
         // nasty hack
         content = serde_json::to_string(&()).unwrap();
     }
-    let resp_content: U = serde_json::from_str(&content).context("Bad JSON")?;
+    let resp_content: U =
+        serde_json::from_str(&content).context(format!("Bad JSON: {}", content))?;
     Ok(resp_content)
 }
 
@@ -77,13 +85,9 @@ impl SessionMan {
         })
     }
 
-    fn post_provider<U>(
-        &self,
-        provider: NodeId,
-        service: u32,
-        json: &serde_json::Value,
-    ) -> Fallible<U>
+    fn post_provider<T, U>(&self, provider: NodeId, service: u32, json: &T) -> Fallible<U>
     where
+        T: Serialize,
         for<'a> U: Deserialize<'a>,
     {
         let url = format!(
@@ -103,7 +107,7 @@ impl SessionMan {
     }
 
     /// Returns: blob id
-    pub fn upload<T: Serialize>(&self, payload: &T) -> Fallible<u64> {
+    pub fn upload(&self, payload: String) -> Fallible<u64> {
         info!("Creating a slot");
         let session = &self.hub_session;
         let url = format!(
@@ -113,7 +117,10 @@ impl SessionMan {
         let blob_id: u64 = query_deserialize(Method::POST, &url, json!({}))?;
         let url = format!("{}/{}", url, blob_id);
         info!("Uploading a file, id = {}", blob_id);
-        let _reply: () = query_deserialize(Method::PUT, &url, payload)?;
+
+        let client = reqwest::Client::new();
+        client.put(&url).body(payload).send()?;
+
         info!("Uploaded a file, id = {}", blob_id);
         Ok(blob_id)
     }
@@ -200,24 +207,17 @@ impl SessionMan {
         Ok(session)
     }
 
-    pub fn exec(&self, executable: &str, args: &[&str]) -> Fallible<()> {
+    pub fn exec_commands(&self, cmd: Vec<Command>) -> Fallible<Vec<String>> {
         let session = self.get_provider_session()?;
         let service = 38;
-        let payload = json!({
-            "sessionId": session.session_id,
-            "commands": [{
-                "exec": {
-                    "executable": executable,
-                    "args": args
-                }
-            }]
-        });
-        info!("Payload is:\n{}", payload);
+        let payload = SessionUpdate {
+            session_id: session.session_id.clone(),
+            commands: cmd,
+        };
         let reply: Vec<String> = self
             .post_provider(session.node_id, service, &payload)
-            .context("POST request")?;
-        println!("Output:\n{:?}", reply);
-        Ok(())
+            .context("Command execution")?;
+        Ok(reply)
     }
 
     fn get_providers(&self) -> Fallible<Vec<PeerInfo>> {
