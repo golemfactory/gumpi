@@ -6,7 +6,6 @@ use std::path::PathBuf;
 pub struct SessionMPI<'a> {
     mgr: &'a mut SessionMan,
     progname: String,
-    progdir: PathBuf,
     providers: Vec<Provider>,
 }
 
@@ -16,8 +15,6 @@ impl<'a> SessionMPI<'a> {
         progname: String,
         providers: Vec<Provider>,
     ) -> Fallible<Self> {
-        let home = dirs::home_dir().expect("Unable to get the home dir");
-        let progdir = home.join("pub").join(&progname);
         // TODO check if providers is not empty
         let root = &providers[0];
         mgr.init_provider_session(root.id)
@@ -26,7 +23,6 @@ impl<'a> SessionMPI<'a> {
         Ok(SessionMPI {
             mgr,
             progname,
-            progdir,
             providers,
         })
     }
@@ -46,7 +42,7 @@ impl<'a> SessionMPI<'a> {
 
         let download_cmd = Command::DownloadFile {
             uri: format!(
-                "http://{}/sessions/{}/blob/{}",
+                "http://{}/sessions/{}/blobs/{}",
                 self.mgr.hub_ip, self.mgr.hub_session.session_id, blob_id
             ),
             file_path: "hostfile".to_owned(),
