@@ -91,7 +91,7 @@ impl SessionMan {
         for<'a> U: Deserialize<'a>,
     {
         let url = format!(
-            "http://{}/peer/send-to/{}/{}",
+            "http://{}/peers/send-to/{}/{}",
             self.hub_ip,
             provider.to_string(),
             service
@@ -111,7 +111,7 @@ impl SessionMan {
         info!("Creating a slot");
         let session = &self.hub_session;
         let url = format!(
-            "http://{}/sessions/{}/blob",
+            "http://{}/sessions/{}/blobs",
             self.hub_ip, session.session_id
         );
         let blob_id: u64 = query_deserialize(Method::POST, &url, json!({}))?;
@@ -221,10 +221,15 @@ impl SessionMan {
     }
 
     fn get_providers(&self) -> Fallible<Vec<PeerInfo>> {
-        let url = format!("http://{}/peer", self.hub_ip);
+        let url = format!("http://{}/peers", self.hub_ip);
         let mut reply = reqwest::get(&url)?;
-        let info = reply.json()?;
-        Ok(info)
+        let status = reply.status();
+        if status.is_success() {
+            let info = reply.json()?;
+            Ok(info)
+        } else {
+            Err(format_err!("Hub returned an error: {}", status))
+        }
     }
 
     pub fn get_provider_info(&self) -> Fallible<Vec<Provider>> {
