@@ -51,7 +51,10 @@ where
     T: Serialize,
     for<'a> U: Deserialize<'a>,
 {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(None)
+        .build()
+        .expect("Building a client");
     debug!(
         "Payload:\n {}",
         serde_json::to_string_pretty(&payload)

@@ -56,6 +56,7 @@ impl<'a> SessionMPI<'a> {
             executable: "mpirun".to_owned(),
             args: cmdline,
         };
+        info!("Executing...");
         let ret = self.mgr.exec_commands(vec![download_cmd, exec_cmd])?;
         println!("Output:");
         for out in ret {
