@@ -31,16 +31,25 @@ impl<'a> SessionMPI<'a> {
         self.mgr.exec("make", &["-C", progdir])
     }*/
 
-    pub fn exec<T: Into<String>>(&self, nproc: u32, args: Vec<T>) -> Fallible<()> {
-        let args = args.into_iter().map(T::into);
-        let mut cmdline = vec![
+    pub fn exec<T: Into<String>>(
+        &self,
+        nproc: u32,
+        args: Vec<T>,
+        mpiargs: Option<Vec<T>>,
+    ) -> Fallible<()> {
+        let mut cmdline = vec![];
+
+        if let Some(args) = mpiargs {
+            cmdline.extend(args.into_iter().map(T::into));
+        }
+        cmdline.extend(vec![
             "-n".to_owned(),
             nproc.to_string(),
             "--hostfile".to_owned(),
             "hostfile".to_owned(),
             self.progname.clone(),
-        ];
-        cmdline.extend(args);
+        ]);
+        cmdline.extend(args.into_iter().map(T::into));
 
         let hostfile = self.hostfile()?;
         let blob_id = self.mgr.upload(hostfile)?;
