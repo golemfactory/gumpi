@@ -62,17 +62,5 @@ fn run() -> Fallible<()> {
 
     mpi_sess.exec(opt.numproc, config.args, config.mpiargs)?;
 
-    /*   info!("Creating session");
-        mgr.create().context("During create")?;
-
-        let mpimgr = SessionMPI::new(&mgr, config.progname);
-        //mpimgr.make()?;
-        mpimgr.run(opt.numproc, &["foo"])?;
-        println!(
-            "providers {:?}",
-            mgr.get_providers().context("during get_providers")?
-        );
-        println!("{}", mpimgr.hostfile()?);
-    */
     Ok(())
 }
