@@ -232,24 +232,29 @@ impl SessionMan {
         let providers = self.get_providers()?;
         let res = providers
             .into_iter()
-            .map(|info| -> Fallible<Provider> {
+            .filter_map(|info| {
                 let id = info.node_id;
                 let service = 19354;
                 let payload = json!(null);
 
                 let hw = self.post_provider(id, service, &payload);
-                let hw: Hardware = hw.context(format!("POST to {}", id.to_string()))?;
+                let hw: Hardware = match hw {
+                    Ok(hw) => hw,
+                    Err(e) => {
+                        error!("Error while querying provider info: {}", e);
+                        return None;
+                    }
+                };
 
                 // TODO handle peers without an IP
                 let ip_port: SocketAddr = info.peer_addr.unwrap().parse().unwrap();
 
-                Ok(Provider {
+                Some(Provider {
                     id,
                     ip: ip_port.ip(),
                     cpus: hw.num_cores,
                 })
             })
-            .filter_map(Result::ok)
             .collect();
         Ok(res)
     }
