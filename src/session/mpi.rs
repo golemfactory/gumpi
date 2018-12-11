@@ -1,4 +1,3 @@
-// use crate::failure_ext::OptionExt;
 use crate::session::{Command, Provider, SessionMan};
 use failure::{Fallible, ResultExt};
 
@@ -25,11 +24,6 @@ impl<'a> SessionMPI<'a> {
             providers,
         })
     }
-
-    /*pub fn make(&self) -> Fallible<()> {
-        let progdir = self.progdir.to_str().expect("progdir is invalid utf8");
-        self.mgr.exec("make", &["-C", progdir])
-    }*/
 
     pub fn exec<T: Into<String>>(
         &self,

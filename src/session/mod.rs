@@ -175,13 +175,6 @@ impl SessionMan {
         Ok(())
     }
 
-    /*pub fn session_hub(&mut self) {
-        let payload = CreateSession {
-            name: "gumpi".to_owned(),
-            environment: "hd".to_owned()
-        }
-    }*/
-
     /// this method is private, destruction is a part of RAII
     /// if no session has been established, this is a no-op
     fn destroy_provider_session(&mut self) -> Fallible<()> {
@@ -260,17 +253,4 @@ impl SessionMan {
             .collect();
         Ok(res)
     }
-
-    /*pub fn provider_hwinfo(&self, provider_addr: SocketAddr) {
-        let id = 19354;
-        let payload = json!({
-            "b": null
-        });
-        let reply: Hardware = self.post_provider(id: u32, json: T)
-    }*/
-
-    /*pub fn new_session(ip: String) -> Self {
-        let mgr = Self::new(ip);
-        mgr.conne
-    }*/
 }
