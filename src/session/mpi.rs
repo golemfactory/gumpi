@@ -1,7 +1,6 @@
 // use crate::failure_ext::OptionExt;
 use crate::session::{Command, Provider, SessionMan};
 use failure::{Fallible, ResultExt};
-use std::path::PathBuf;
 
 pub struct SessionMPI<'a> {
     mgr: &'a mut SessionMan,
@@ -34,7 +33,13 @@ impl<'a> SessionMPI<'a> {
 
     pub fn exec<T: Into<String>>(&self, nproc: u32, args: Vec<T>) -> Fallible<()> {
         let args = args.into_iter().map(T::into);
-        let mut cmdline = vec!["-n".to_owned(), nproc.to_string(), self.progname.clone()];
+        let mut cmdline = vec![
+            "-n".to_owned(),
+            nproc.to_string(),
+            "--hostfile".to_owned(),
+            "hostfile".to_owned(),
+            self.progname.clone(),
+        ];
         cmdline.extend(args);
 
         let hostfile = self.hostfile()?;
@@ -52,7 +57,10 @@ impl<'a> SessionMPI<'a> {
             args: cmdline,
         };
         let ret = self.mgr.exec_commands(vec![download_cmd, exec_cmd])?;
-        println!("Output: {:?}", ret);
+        println!("Output:");
+        for out in ret {
+            println!("{}\n========================", out);
+        }
         Ok(())
     }
 
