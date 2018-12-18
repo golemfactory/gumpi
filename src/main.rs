@@ -18,7 +18,10 @@ mod session;
 
 use crate::{
     jobconfig::{JobConfig, Opt},
-    session::{mpi::SessionMPI, SessionMan},
+    session::{
+        mpi::{BuildMode, SessionMPI},
+        SessionMan,
+    },
 };
 use failure::{format_err, Fallible, ResultExt};
 use std::env;
@@ -59,6 +62,11 @@ fn run() -> Fallible<()> {
 
     let mpi_sess = SessionMPI::new(&mut mgr, config.progname, providers)?;
     println!("HOSTFILE:\n{}", mpi_sess.hostfile()?);
+
+    if let Some(path) = config.sources {
+        warn!("Building the binaries currently requires a common filesystem!");
+        mpi_sess.build(&path, BuildMode::CMake)?;
+    }
 
     mpi_sess.exec(opt.numproc, config.args, config.mpiargs)?;
 

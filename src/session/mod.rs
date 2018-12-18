@@ -5,7 +5,9 @@ use failure::{format_err, Fallible, ResultExt};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::fs;
 use std::net::{IpAddr, SocketAddr};
+use std::path::Path;
 
 mod gu_struct;
 pub mod mpi;
@@ -23,6 +25,8 @@ struct ProviderSession {
 struct HubSession {
     session_id: u64,
 }
+
+type BlobId = u64;
 
 pub struct SessionMan {
     hub_ip: SocketAddr,
@@ -110,7 +114,7 @@ impl SessionMan {
     }
 
     /// Returns: blob id
-    pub fn upload(&self, payload: String) -> Fallible<u64> {
+    pub fn upload(&self, payload: String) -> Fallible<BlobId> {
         info!("Creating a slot");
         let session = &self.hub_session;
         let url = format!(
@@ -126,6 +130,11 @@ impl SessionMan {
 
         info!("Uploaded a file, id = {}", blob_id);
         Ok(blob_id)
+    }
+
+    pub fn upload_file(&self, file: &Path) -> Fallible<BlobId> {
+        let data = fs::read_to_string(file).context("reading the file")?;
+        self.upload(data)
     }
 
     fn init_hub_session(hub_ip: SocketAddr) -> Fallible<HubSession> {
@@ -173,6 +182,16 @@ impl SessionMan {
             node_id: node, // TODO find a way to use a reference without explicit lifetimeing
         });
         Ok(())
+    }
+
+    pub fn get_download_cmd(&self, blob_id: BlobId, filename: String) -> Command {
+        Command::DownloadFile {
+            uri: format!(
+                "http://{}/sessions/{}/blobs/{}",
+                self.hub_ip, self.hub_session.session_id, blob_id
+            ),
+            file_path: filename,
+        }
     }
 
     /// this method is private, destruction is a part of RAII

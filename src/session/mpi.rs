@@ -1,5 +1,14 @@
 use crate::session::{Command, Provider, SessionMan};
 use failure::{Fallible, ResultExt};
+use std::path::Path;
+
+// TODO allow specifying build mode in the config
+#[allow(dead_code)]
+#[derive(PartialEq)]
+pub enum BuildMode {
+    Makefile,
+    CMake,
+}
 
 pub struct SessionMPI<'a> {
     mgr: &'a mut SessionMan,
@@ -48,19 +57,49 @@ impl<'a> SessionMPI<'a> {
         let hostfile = self.hostfile()?;
         let blob_id = self.mgr.upload(hostfile)?;
 
-        let download_cmd = Command::DownloadFile {
-            uri: format!(
-                "http://{}/sessions/{}/blobs/{}",
-                self.mgr.hub_ip, self.mgr.hub_session.session_id, blob_id
-            ),
-            file_path: "hostfile".to_owned(),
-        };
+        let download_cmd = self.mgr.get_download_cmd(blob_id, "hostfile".to_owned());
         let exec_cmd = Command::Exec {
             executable: "mpirun".to_owned(),
             args: cmdline,
         };
         info!("Executing...");
         let ret = self.mgr.exec_commands(vec![download_cmd, exec_cmd])?;
+        println!("Output:");
+        for out in ret {
+            println!("{}\n========================", out);
+        }
+        Ok(())
+    }
+
+    pub fn build(&self, sources_archive: &Path, mode: BuildMode) -> Fallible<()> {
+        let filename = sources_archive
+            .file_name()
+            .expect("Invalid path for sources")
+            .to_str()
+            .expect("Invalid filename");
+        let blob_id = self.mgr.upload_file(sources_archive)?;
+        let download_cmd = self.mgr.get_download_cmd(blob_id, filename.to_owned());
+
+        let unpack_cmd = Command::Exec {
+            executable: "unzip".to_owned(),
+            args: vec![filename.to_owned()],
+        };
+
+        let mut cmds = vec![download_cmd, unpack_cmd];
+
+        if mode == BuildMode::CMake {
+            cmds.push(Command::Exec {
+                executable: "cmake".to_owned(),
+                args: vec![".".to_owned()],
+            });
+        }
+
+        cmds.push(Command::Exec {
+            executable: "make".to_owned(),
+            args: vec![],
+        });
+
+        let ret = self.mgr.exec_commands(cmds)?;
         println!("Output:");
         for out in ret {
             println!("{}\n========================", out);
