@@ -1,14 +1,6 @@
 #![warn(clippy::all)]
-extern crate failure;
-extern crate reqwest;
-extern crate serde;
-extern crate structopt;
 #[macro_use]
 extern crate serde_derive;
-extern crate gu_net;
-extern crate serde_json;
-extern crate toml;
-
 #[macro_use]
 extern crate log;
 
