@@ -1,5 +1,3 @@
-extern crate gu_envman_api;
-
 use crate::failure_ext::OptionExt;
 use failure::{format_err, Fallible, ResultExt};
 use reqwest::Method;
@@ -13,8 +11,8 @@ mod gu_struct;
 pub mod mpi;
 
 use self::gu_struct::*;
-pub use gu_envman_api::Command;
-use gu_envman_api::SessionUpdate;
+pub use gu_model::envman::Command;
+use gu_model::envman::SessionUpdate;
 use gu_net::NodeId;
 
 struct ProviderSession {
@@ -164,14 +162,15 @@ impl SessionMan {
         let service = 37;
         let payload = json!({
             "image": {
-                "url": "http://52.31.143.91/images/monero-linux.tar.gz",
-                "hash": "45b4aad70175ebefdbd1ca26d549fbee74a49d51"
+                "url": "http://52.31.143.91/images/gumpi-image.tar.gz",
+                "hash": "44d65afc45b1a78c3976b6fe42f4dec6253923bb7c671862556f841034d256a0"
             },
             "name": "monero mining",
             "tags": [],
             "note": "None",
             "envType": "hd"
         });
+        debug!("payload: {}", payload);
 
         let session_id: String = self
             .post_provider(node, service, &payload)
