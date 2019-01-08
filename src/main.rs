@@ -10,10 +10,7 @@ mod session;
 
 use crate::{
     jobconfig::{JobConfig, Opt},
-    session::{
-        mpi::{BuildMode, SessionMPI},
-        SessionMan,
-    },
+    session::mpi::{BuildMode, SessionMPI},
 };
 use failure::{format_err, Fallible, ResultExt};
 use std::env;
@@ -42,7 +39,8 @@ fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
-    let mut mgr = SessionMan::new(opt.hub)?;
+    let mut mgr = SessionMPI::init(opt.hub);
+    /*let mut mgr = SessionMan::new(opt.hub)?;
     let providers = mgr.get_provider_info().context("getting provider info")?;
     println!("PROVIDERS:");
     for p in &providers {
@@ -60,7 +58,7 @@ fn run() -> Fallible<()> {
         mpi_sess.build(&path, BuildMode::CMake)?;
     }
 
-    mpi_sess.exec(opt.numproc, config.args, config.mpiargs)?;
+    mpi_sess.exec(opt.numproc, config.args, config.mpiargs)?;*/
 
     Ok(())
 }

@@ -1,6 +1,63 @@
-use crate::session::{Command, Provider, SessionMan};
+use super::gu_struct::Hardware;
+use crate::session::{Command, HubSession, NodeId, ProviderSession};
 use failure::{Fallible, ResultExt};
+use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
+use std::rc::Rc;
+
+pub struct SessionMPI {
+    provider_sessions: Vec<ProviderSession>,
+    hub_session: Rc<HubSession>,
+}
+
+impl SessionMPI {
+    pub fn init(hub_ip: SocketAddr) -> Fallible<Self> {
+        let hub_session = HubSession::new(hub_ip)?;
+        let hub_session = Rc::new(hub_session);
+
+        let providers = hub_session.get_providers()?;
+        let provider_sessions: Vec<ProviderSession> = providers
+            .into_iter()
+            .filter_map(|p| {
+                let sess = ProviderSession::new(Rc::clone(&hub_session), p);
+                match sess {
+                    Err(e) => {
+                        warn!("Error initalizing provider session: {}", e);
+                        None
+                    }
+                    Ok(r) => {
+                        info!("Connected to provider: {:#?}", r);
+                        Some(r)
+                    }
+                }
+            })
+            .collect();
+
+        info!("Initialized GUMPI.");
+
+        Ok(Self {
+            hub_session,
+            provider_sessions,
+        })
+    }
+
+    /*pub fn exec_commands(&self, cmd: Vec<Command>) -> Fallible<Vec<String>> {
+        let session = self.get_provider_session()?;
+        let service = 38;
+        let payload = SessionUpdate {
+            session_id: session.session_id.clone(),
+            commands: cmd,
+        };
+        let reply: Vec<String> = self
+            .post_provider(session.node_id, service, &payload)
+            .context("Command execution")?;
+        Ok(reply)
+    }*/
+
+    /*pub fn get_hardware(&self) -> Vec<Hardware> {
+        self.provider_sessions[0]
+    }*/
+}
 
 // TODO allow specifying build mode in the config
 #[allow(dead_code)]
@@ -9,7 +66,7 @@ pub enum BuildMode {
     Makefile,
     CMake,
 }
-
+/*
 pub struct SessionMPI<'a> {
     mgr: &'a mut SessionMan,
     progname: String,
@@ -119,3 +176,4 @@ impl<'a> SessionMPI<'a> {
         Ok(file_lines.join("\n"))
     }
 }
+*/
