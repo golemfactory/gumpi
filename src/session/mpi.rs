@@ -1,6 +1,6 @@
 use super::gu_struct::Hardware;
 use crate::session::{Command, HubSession, NodeId, ProviderSession};
-use failure::{Fallible, ResultExt};
+use failure::{format_err, Fallible, ResultExt};
 use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
 use std::rc::Rc;
@@ -32,6 +32,10 @@ impl SessionMPI {
                 }
             })
             .collect();
+
+        if provider_sessions.is_empty() {
+            return Err(format_err!("No providers available"));
+        }
 
         info!("Initialized GUMPI.");
 
