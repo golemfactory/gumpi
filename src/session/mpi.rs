@@ -45,6 +45,33 @@ impl SessionMPI {
         })
     }
 
+    pub fn hostfile(&self) -> Fallible<String> {
+        let peers = &self.provider_sessions;
+        let file_lines: Vec<_> = peers
+            .iter()
+            .filter_map(|peer| {
+                // TODO depend on number of procs?
+                let hw = match peer.get_hardware() {
+                    Ok(hw) => hw,
+                    Err(e) => {
+                        warn!("Error getting hardware for peer {:?}: {}", peer, e);
+                        return None;
+                    }
+                };
+
+                // Use map to handle ip-less peers
+                peer.peerinfo.peer_addr.as_ref().map(|ip_sock| {
+                    let ip_sock: SocketAddr = ip_sock.parse().unwrap_or_else(|_| {
+                        panic!("GU returned an invalid IP address, {}", ip_sock)
+                    });
+                    let ip = ip_sock.ip();
+                    format!("{} port=4222 slots={}", ip, hw.num_cores)
+                })
+            })
+            .collect();
+        Ok(file_lines.join("\n"))
+    }
+
     /*pub fn exec_commands(&self, cmd: Vec<Command>) -> Fallible<Vec<String>> {
         let session = self.get_provider_session()?;
         let service = 38;
@@ -166,18 +193,6 @@ impl<'a> SessionMPI<'a> {
             println!("{}\n========================", out);
         }
         Ok(())
-    }
-
-    pub fn hostfile(&self) -> Fallible<String> {
-        let peers = &self.providers;
-        let file_lines: Vec<_> = peers
-            .iter()
-            .map(|peer| {
-                // TODO depend on number of procs?
-                format!("{} port=4222 slots={}", peer.ip, peer.cpus)
-            })
-            .collect();
-        Ok(file_lines.join("\n"))
     }
 }
 */

@@ -39,7 +39,8 @@ fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
-    let mut mgr = SessionMPI::init(opt.hub);
+    let mut mgr = SessionMPI::init(opt.hub)?;
+    println!("HOSTFILE:\n{}", mgr.hostfile()?);
     /*let mut mgr = SessionMan::new(opt.hub)?;
     let providers = mgr.get_provider_info().context("getting provider info")?;
     println!("PROVIDERS:");
@@ -51,7 +52,7 @@ fn run() -> Fallible<()> {
     }
 
     let mpi_sess = SessionMPI::new(&mut mgr, config.progname, providers)?;
-    println!("HOSTFILE:\n{}", mpi_sess.hostfile()?);
+
 
     if let Some(path) = config.sources {
         warn!("Building the binaries currently requires a common filesystem!");
