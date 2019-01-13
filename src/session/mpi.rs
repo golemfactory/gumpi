@@ -1,8 +1,6 @@
-use super::gu_struct::Hardware;
-use crate::session::{Command, HubSession, NodeId, ProviderSession};
-use failure::{format_err, Fallible, ResultExt};
-use std::net::{IpAddr, SocketAddr};
-use std::path::Path;
+use super::{Command, HubSession, ProviderSession};
+use failure::{format_err, Fallible};
+use std::net::SocketAddr;
 use std::rc::Rc;
 
 pub struct SessionMPI {
@@ -45,6 +43,10 @@ impl SessionMPI {
         })
     }
 
+    fn root_provider(&self) -> &ProviderSession {
+        &self.provider_sessions[0]
+    }
+
     pub fn hostfile(&self) -> Fallible<String> {
         let peers = &self.provider_sessions;
         let file_lines: Vec<_> = peers
@@ -72,62 +74,14 @@ impl SessionMPI {
         Ok(file_lines.join("\n"))
     }
 
-    /*pub fn exec_commands(&self, cmd: Vec<Command>) -> Fallible<Vec<String>> {
-        let session = self.get_provider_session()?;
-        let service = 38;
-        let payload = SessionUpdate {
-            session_id: session.session_id.clone(),
-            commands: cmd,
-        };
-        let reply: Vec<String> = self
-            .post_provider(session.node_id, service, &payload)
-            .context("Command execution")?;
-        Ok(reply)
-    }*/
-
-    /*pub fn get_hardware(&self) -> Vec<Hardware> {
-        self.provider_sessions[0]
-    }*/
-}
-
-// TODO allow specifying build mode in the config
-#[allow(dead_code)]
-#[derive(PartialEq)]
-pub enum BuildMode {
-    Makefile,
-    CMake,
-}
-/*
-pub struct SessionMPI<'a> {
-    mgr: &'a mut SessionMan,
-    progname: String,
-    providers: Vec<Provider>,
-}
-
-impl<'a> SessionMPI<'a> {
-    pub fn new(
-        mgr: &'a mut SessionMan,
-        progname: String,
-        providers: Vec<Provider>,
-    ) -> Fallible<Self> {
-        // TODO check if providers is not empty
-        let root = &providers[0];
-        mgr.init_provider_session(root.id)
-            .context("creating the session failed")?;
-
-        Ok(SessionMPI {
-            mgr,
-            progname,
-            providers,
-        })
-    }
-
     pub fn exec<T: Into<String>>(
         &self,
         nproc: u32,
+        progname: T,
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,
     ) -> Fallible<()> {
+        let root = self.root_provider();
         let mut cmdline = vec![];
 
         if let Some(args) = mpiargs {
@@ -138,56 +92,23 @@ impl<'a> SessionMPI<'a> {
             nproc.to_string(),
             "--hostfile".to_owned(),
             "hostfile".to_owned(),
-            self.progname.clone(),
+            progname.into(),
         ]);
         cmdline.extend(args.into_iter().map(T::into));
 
         let hostfile = self.hostfile()?;
-        let blob_id = self.mgr.upload(hostfile)?;
+        let blob_id = self.hub_session.upload(hostfile)?;
+        info!("Downloading the hostfile...");
+        let download_output = root.download(blob_id, "hostfile".to_owned());
+        info!("Downloaded: {:?}", download_output);
 
-        let download_cmd = self.mgr.get_download_cmd(blob_id, "hostfile".to_owned());
+        info!("Executing mpirun with args {:?}...", cmdline);
         let exec_cmd = Command::Exec {
             executable: "mpirun".to_owned(),
             args: cmdline,
         };
-        info!("Executing...");
-        let ret = self.mgr.exec_commands(vec![download_cmd, exec_cmd])?;
-        println!("Output:");
-        for out in ret {
-            println!("{}\n========================", out);
-        }
-        Ok(())
-    }
 
-    pub fn build(&self, sources_archive: &Path, mode: BuildMode) -> Fallible<()> {
-        let filename = sources_archive
-            .file_name()
-            .expect("Invalid path for sources")
-            .to_str()
-            .expect("Invalid filename");
-        let blob_id = self.mgr.upload_file(sources_archive)?;
-        let download_cmd = self.mgr.get_download_cmd(blob_id, filename.to_owned());
-
-        let unpack_cmd = Command::Exec {
-            executable: "unzip".to_owned(),
-            args: vec![filename.to_owned()],
-        };
-
-        let mut cmds = vec![download_cmd, unpack_cmd];
-
-        if mode == BuildMode::CMake {
-            cmds.push(Command::Exec {
-                executable: "cmake".to_owned(),
-                args: vec![".".to_owned()],
-            });
-        }
-
-        cmds.push(Command::Exec {
-            executable: "make".to_owned(),
-            args: vec![],
-        });
-
-        let ret = self.mgr.exec_commands(cmds)?;
+        let ret = root.exec_commands(vec![exec_cmd])?;
         println!("Output:");
         for out in ret {
             println!("{}\n========================", out);
@@ -195,4 +116,10 @@ impl<'a> SessionMPI<'a> {
         Ok(())
     }
 }
-*/
+
+// TODO allow specifying build mode in the config
+/*#[derive(PartialEq)]
+pub enum BuildMode {
+    Makefile,
+    CMake,
+}*/

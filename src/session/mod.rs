@@ -1,10 +1,10 @@
-use crate::failure_ext::OptionExt;
 use failure::{format_err, Fallible, ResultExt};
+use gu_model::envman::SessionUpdate;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -13,7 +13,6 @@ pub mod mpi;
 
 use self::gu_struct::*;
 pub use gu_model::envman::Command;
-use gu_model::envman::SessionUpdate;
 use gu_net::NodeId;
 
 #[derive(Debug)]
@@ -21,11 +20,6 @@ struct ProviderSession {
     session_id: String,
     peerinfo: PeerInfo,
     hub_session: Rc<HubSession>,
-}
-
-pub struct ProviderInfo {
-    hardware: Hardware,
-    ip: SocketAddr,
 }
 
 impl ProviderSession {
@@ -83,11 +77,34 @@ impl ProviderSession {
         Ok(hw)
     }
 
-    pub fn get_info(&self) -> Fallible<ProviderInfo> {
-        let hardware = self.get_hardware()?;
-        // TODO handle peers without an IP
-        let ip: SocketAddr = self.peerinfo.peer_addr.as_ref().unwrap().parse()?;
-        Ok(ProviderInfo { hardware, ip })
+    pub fn post_service<T, U>(&self, service: u32, json: &T) -> Fallible<U>
+    where
+        T: Serialize,
+        for<'a> U: Deserialize<'a>,
+    {
+        self.hub_session
+            .post_provider(self.peerinfo.node_id, service, json)
+    }
+
+    fn exec_commands<I>(&self, cmds: I) -> Fallible<Vec<String>>
+    where
+        I: IntoIterator<Item = Command>,
+    {
+        let service = 38;
+        let payload = SessionUpdate {
+            session_id: self.session_id.clone(),
+            commands: cmds.into_iter().collect(),
+        };
+        let reply: Vec<String> = self
+            .post_service(service, &payload)
+            .context("Command execution")?;
+        Ok(reply)
+    }
+
+    // TODO return type?
+    pub fn download(&self, blob_id: BlobId, filename: String) -> Fallible<Vec<String>> {
+        let cmd = self.hub_session.get_download_cmd(blob_id, filename);
+        self.exec_commands(vec![cmd])
     }
 }
 

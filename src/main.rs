@@ -10,9 +10,9 @@ mod session;
 
 use crate::{
     jobconfig::{JobConfig, Opt},
-    session::mpi::{BuildMode, SessionMPI},
+    session::mpi::SessionMPI,
 };
-use failure::{format_err, Fallible, ResultExt};
+use failure::{Fallible, ResultExt};
 use std::env;
 use structopt::StructOpt;
 
@@ -39,27 +39,9 @@ fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
-    let mut mgr = SessionMPI::init(opt.hub)?;
+    let mgr = SessionMPI::init(opt.hub)?;
     println!("HOSTFILE:\n{}", mgr.hostfile()?);
-    /*let mut mgr = SessionMan::new(opt.hub)?;
-    let providers = mgr.get_provider_info().context("getting provider info")?;
-    println!("PROVIDERS:");
-    for p in &providers {
-        println!("{:?}", p);
-    }
-    if providers.is_empty() {
-        return Err(format_err!("No providers available"));
-    }
-
-    let mpi_sess = SessionMPI::new(&mut mgr, config.progname, providers)?;
-
-
-    if let Some(path) = config.sources {
-        warn!("Building the binaries currently requires a common filesystem!");
-        mpi_sess.build(&path, BuildMode::CMake)?;
-    }
-
-    mpi_sess.exec(opt.numproc, config.args, config.mpiargs)?;*/
+    mgr.exec(opt.numproc, config.progname, config.args, config.mpiargs)?;
 
     Ok(())
 }
