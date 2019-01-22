@@ -149,6 +149,7 @@ impl HubSession {
     where
         T: Serialize,
         for<'a> U: Deserialize<'a>,
+        U: Sync + Send,
     {
         let url = format!(
             "http://{}/peers/send-to/{}/{}",
@@ -227,31 +228,43 @@ fn query_deserialize<T, U>(method: reqwest::Method, url: &str, payload: T) -> Fa
 where
     T: Serialize,
     for<'a> U: Deserialize<'a>,
+    U: Sync + Send,
 {
-    let client = reqwest::Client::builder()
-        .timeout(None)
-        .build()
-        .expect("Building a client");
     debug!(
         "Payload:\n {}",
         serde_json::to_string_pretty(&payload)
             .unwrap_or_else(|_| "serialization failed".to_owned())
     );
-    let mut resp = client.request(method, url).json(&payload).send()?;
-    if !resp.status().is_success() {
-        return Err(format_err!(
-            "Querying URL {} returned an error: {}",
-            url,
-            resp.status()
-        ));
-    }
-    let mut content = resp.text().unwrap();
-    debug!("Got reply from {}: {:?}", url, content);
-    if content == "" {
-        // nasty hack, "" is not a valid JSON and GU sometimes returns no output
-        content = serde_json::to_string(&()).unwrap();
-    }
-    let resp_content: U =
-        serde_json::from_str(&content).context(format!("Bad JSON: {}", content))?;
-    Ok(resp_content)
+
+    use futures::{future::Either, Future, Stream};
+    use reqwest::r#async::{Client, Response};
+
+    // the async client seems to not time out at all
+    // TODO reuse the client
+
+    let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a tokio runtime");
+    let future = Client::new()
+        .request(method, url)
+        .json(&payload)
+        .send()
+        .and_then(|resp| {
+            if !resp.status().is_success() {
+                return Err(format_err!(
+                    "Querying URL {} returned an error: {}",
+                    url,
+                    resp.status()
+                ));
+            }
+            let mut content = resp.text().unwrap();
+            debug!("Got reply from {}: {:?}", url, content);
+            if content == "" {
+                // nasty hack, "" is not a valid JSON and GU sometimes returns no output
+                content = serde_json::to_string(&()).unwrap();
+            }
+            let resp_content: U =
+                serde_json::from_str(&content).context(format!("Bad JSON: {}", content))?;
+            Ok(resp_content)
+        });
+    //runtime.block_on(future)
+    Ok(())
 }

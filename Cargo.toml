@@ -18,3 +18,5 @@ toml = "0.4.8"
 gu-net = { git = "https://github.com/golemfactory/golem-unlimited" }
 gu-model = { git = "https://github.com/golemfactory/golem-unlimited" }
 gu-client = { git = "https://github.com/golemfactory/golem-unlimited", branch = "gu-client"}
+tokio = "0.1.14"
+futures = "0.1.25"
