@@ -142,6 +142,9 @@ impl HubSession {
         Ok(())
     }
 
+    // When using this function, the type should be explicitly annotated!
+    // This is probably a bug in the Rust compiler
+    // see https://github.com/rust-lang/rust/issues/55928
     fn post_provider<T, U>(&self, provider: NodeId, service: u32, json: &T) -> Fallible<U>
     where
         T: Serialize,
@@ -214,6 +217,12 @@ impl Drop for HubSession {
 
 type BlobId = u64;
 
+// This function is too general and hacky. Not everything in GU will return a valid JSON.
+// See issue https://github.com/golemfactory/gumpi/issues/9
+//
+// When using this function, the type should be explicitly annotated!
+// This is probably a bug in the Rust compiler
+// see https://github.com/rust-lang/rust/issues/55928
 fn query_deserialize<T, U>(method: reqwest::Method, url: &str, payload: T) -> Fallible<U>
 where
     T: Serialize,
@@ -239,7 +248,7 @@ where
     let mut content = resp.text().unwrap();
     debug!("Got reply from {}: {:?}", url, content);
     if content == "" {
-        // nasty hack
+        // nasty hack, "" is not a valid JSON and GU sometimes returns no output
         content = serde_json::to_string(&()).unwrap();
     }
     let resp_content: U =
