@@ -1,18 +1,15 @@
 use actix::prelude::*;
-use actix_web::{
-    client::{self, ClientRequest, ClientResponse},
-    HttpMessage,
-};
+use actix_web::{client::ClientRequest, http::Method, HttpMessage};
 use failure::{format_err, Fallible, ResultExt};
 use futures::prelude::*;
 use gu_model::envman::SessionUpdate;
-use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::rc::Rc;
+use std::time::Duration;
 
 mod gu_struct;
 pub mod mpi;
@@ -136,7 +133,7 @@ impl HubSession {
             name: "gumpi".to_owned(),
             environment: "hd".to_owned(),
         };
-        let session_id: u64 = query_deserialize(Method::POST, &url, payload)?;
+        let session_id: u64 = query_deserialize(Method::POST, &url, payload)?.expect("No content");
         let session = HubSession { session_id, hub_ip };
         Ok(session)
     }
@@ -144,7 +141,7 @@ impl HubSession {
     #[allow(clippy::let_unit_value)]
     fn destroy(&self) -> Fallible<()> {
         let url = format!("http://{}/sessions/{}", self.hub_ip, self.session_id);
-        let _reply: () = query_deserialize(Method::DELETE, &url, json!({}))?;
+        let _: Option<()> = query_deserialize(Method::DELETE, &url, json!({}))?;
         //info!("Reply: {}", reply);
         Ok(())
     }
@@ -170,7 +167,8 @@ impl HubSession {
         // side, but the HTTP request succeeded.
         // Still, if there was an error on the provider side, we want to
         // propagate the error, hence the map_err.
-        let reply: Result<U, String> = query_deserialize(Method::POST, &url, payload)?;
+        let reply: Result<U, String> =
+            query_deserialize(Method::POST, &url, payload)?.expect("No content");
         reply.map_err(|err| format_err!("Provider replied: {}", err))
     }
 
@@ -178,7 +176,7 @@ impl HubSession {
     pub fn upload(&self, payload: String) -> Fallible<BlobId> {
         info!("Creating a slot");
         let url = format!("http://{}/sessions/{}/blobs", self.hub_ip, self.session_id);
-        let blob_id: u64 = query_deserialize(Method::POST, &url, json!({}))?;
+        let blob_id: u64 = query_deserialize(Method::POST, &url, json!({}))?.expect("No content");
         let url = format!("{}/{}", url, blob_id);
         info!("Uploading a file, id = {}", blob_id);
 
@@ -231,40 +229,49 @@ type BlobId = u64;
 // When using this function, the type should be explicitly annotated!
 // This is probably a bug in the Rust compiler
 // see https://github.com/rust-lang/rust/issues/55928
-fn query_deserialize_fut<T, U>(
+fn query_deserialize_json_fut<T, U>(
     method: actix_web::http::Method,
     url: &str,
     payload: T,
-) -> impl Future<Item = U, Error = actix_web::Error>
+) -> impl Future<Item = Option<U>, Error = actix_web::Error>
 where
     T: Serialize,
     for<'a> U: Deserialize<'a>,
     U: Sync + Send + 'static,
 {
+    use actix_web::http::StatusCode;
+
     debug!(
         "Payload:\n {}",
         serde_json::to_string_pretty(&payload)
             .unwrap_or_else(|_| "serialization failed".to_owned())
     );
-    // the async client seems to not time out at all
-    // TODO reuse the client
 
     ClientRequest::build()
         .method(method)
+        .timeout(Duration::from_secs(60 * 60 * 24 * 366)) // 1 year of timeout
         .uri(url)
         .json(&payload)
         .into_future()
         .and_then(|req| req.send().from_err())
-        .and_then(|resp| resp.json().from_err())
+        .and_then(|resp| match resp.status() {
+            StatusCode::NO_CONTENT => None,
+            _ => Some(resp.json().from_err()),
+        })
 }
 
-fn query_deserialize<T, U>(method: actix_web::http::Method, url: &str, payload: T) -> Fallible<U>
+fn query_deserialize<T, U>(
+    method: actix_web::http::Method,
+    url: &str,
+    payload: T,
+) -> Fallible<Option<U>>
 where
     T: Serialize,
     for<'a> U: Deserialize<'a>,
     U: Sync + Send + 'static,
 {
+    // TODO we definitely shouldn't create a system for every request
     let mut sys = System::new("gumpi");
-    let fut = query_deserialize_fut(method, url, payload);
+    let fut = query_deserialize_json_fut(method, url, payload);
     sys.block_on(fut).map_err(|e| e.into()) //.map_err(|e| format_err!("{}", e))
 }
