@@ -1,4 +1,10 @@
+use actix::prelude::*;
+use actix_web::{
+    client::{self, ClientRequest, ClientResponse},
+    HttpMessage,
+};
 use failure::{format_err, Fallible, ResultExt};
+use futures::prelude::*;
 use gu_model::envman::SessionUpdate;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -81,6 +87,7 @@ impl ProviderSession {
     where
         T: Serialize,
         for<'a> U: Deserialize<'a>,
+        U: Sync + Send + 'static,
     {
         self.hub_session
             .post_provider(self.peerinfo.node_id, service, json)
@@ -149,7 +156,7 @@ impl HubSession {
     where
         T: Serialize,
         for<'a> U: Deserialize<'a>,
-        U: Sync + Send,
+        U: Sync + Send + 'static,
     {
         let url = format!(
             "http://{}/peers/send-to/{}/{}",
@@ -224,47 +231,40 @@ type BlobId = u64;
 // When using this function, the type should be explicitly annotated!
 // This is probably a bug in the Rust compiler
 // see https://github.com/rust-lang/rust/issues/55928
-fn query_deserialize<T, U>(method: reqwest::Method, url: &str, payload: T) -> Fallible<U>
+fn query_deserialize_fut<T, U>(
+    method: actix_web::http::Method,
+    url: &str,
+    payload: T,
+) -> impl Future<Item = U, Error = actix_web::Error>
 where
     T: Serialize,
     for<'a> U: Deserialize<'a>,
-    U: Sync + Send,
+    U: Sync + Send + 'static,
 {
     debug!(
         "Payload:\n {}",
         serde_json::to_string_pretty(&payload)
             .unwrap_or_else(|_| "serialization failed".to_owned())
     );
-
-    use futures::{future::Either, Future, Stream};
-    use reqwest::r#async::{Client, Response};
-
     // the async client seems to not time out at all
     // TODO reuse the client
 
-    let mut runtime = tokio::runtime::Runtime::new().expect("Unable to create a tokio runtime");
-    let future = Client::new()
-        .request(method, url)
+    ClientRequest::build()
+        .method(method)
+        .uri(url)
         .json(&payload)
-        .send()
-        .and_then(|resp| {
-            if !resp.status().is_success() {
-                return Err(format_err!(
-                    "Querying URL {} returned an error: {}",
-                    url,
-                    resp.status()
-                ));
-            }
-            let mut content = resp.text().unwrap();
-            debug!("Got reply from {}: {:?}", url, content);
-            if content == "" {
-                // nasty hack, "" is not a valid JSON and GU sometimes returns no output
-                content = serde_json::to_string(&()).unwrap();
-            }
-            let resp_content: U =
-                serde_json::from_str(&content).context(format!("Bad JSON: {}", content))?;
-            Ok(resp_content)
-        });
-    //runtime.block_on(future)
-    Ok(())
+        .into_future()
+        .and_then(|req| req.send().from_err())
+        .and_then(|resp| resp.json().from_err())
+}
+
+fn query_deserialize<T, U>(method: actix_web::http::Method, url: &str, payload: T) -> Fallible<U>
+where
+    T: Serialize,
+    for<'a> U: Deserialize<'a>,
+    U: Sync + Send + 'static,
+{
+    let mut sys = System::new("gumpi");
+    let fut = query_deserialize_fut(method, url, payload);
+    sys.block_on(fut).map_err(|e| e.into()) //.map_err(|e| format_err!("{}", e))
 }
