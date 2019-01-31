@@ -1,10 +1,12 @@
 use actix::prelude::*;
 use actix_web::{client::ClientRequest, http::Method, HttpMessage};
 use failure::{format_err, Fallible, ResultExt};
+use futures::future::Either;
 use futures::prelude::*;
 use gu_model::envman::SessionUpdate;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::convert::Into;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
@@ -141,7 +143,7 @@ impl HubSession {
     #[allow(clippy::let_unit_value)]
     fn destroy(&self) -> Fallible<()> {
         let url = format!("http://{}/sessions/{}", self.hub_ip, self.session_id);
-        let _: Option<()> = query_deserialize(Method::DELETE, &url, json!({}))?;
+        query_deserialize::<_, ()>(Method::DELETE, &url, json!({}))?;
         //info!("Reply: {}", reply);
         Ok(())
     }
@@ -211,6 +213,7 @@ impl HubSession {
                 self.hub_ip, self.session_id, blob_id
             ),
             file_path: filename,
+            format: Default::default(),
         }
     }
 }
@@ -254,9 +257,37 @@ where
         .json(&payload)
         .into_future()
         .and_then(|req| req.send().from_err())
-        .and_then(|resp| match resp.status() {
-            StatusCode::NO_CONTENT => None,
-            _ => Some(resp.json().from_err()),
+        .and_then(|resp| {
+            let status = resp.status();
+            match status {
+                StatusCode::NO_CONTENT => None,
+                _ => Some(resp.json().from_err()),
+            }
+        })
+}
+
+fn wait_ctrlc<F: Future>(future: F) -> Fallible<F::Item>
+where
+    F::Error: failure::Fail,
+{
+    // TODO we definitely shouldn't create a system for every request
+    let mut sys = System::new("gumpi");
+    let ctrlc = tokio_signal::ctrl_c()
+        .flatten_stream()
+        .into_future()
+        .map_err(|_| ());
+    let fut = future.select2(ctrlc);
+    sys.block_on(fut)
+        .map_err(|e| match e {
+            Either::A((e, _)) => e.into(),
+            _ => panic!("Ctrl-C handling failed"),
+        })
+        .and_then(|res| match res {
+            Either::A((r, _)) => Ok(r),
+            Either::B(_) => {
+                info!("Ctrl-C received, cleaning-up...");
+                Err(format_err!("Ctrl-C received..."))
+            }
         })
 }
 
@@ -270,8 +301,6 @@ where
     for<'a> U: Deserialize<'a>,
     U: Sync + Send + 'static,
 {
-    // TODO we definitely shouldn't create a system for every request
-    let mut sys = System::new("gumpi");
     let fut = query_deserialize_json_fut(method, url, payload);
-    sys.block_on(fut).map_err(|e| e.into()) //.map_err(|e| format_err!("{}", e))
+    wait_ctrlc(fut)
 }

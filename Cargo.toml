@@ -22,3 +22,4 @@ tokio = "0.1.14"
 futures = "0.1.25"
 actix-web = { git = "https://github.com/marmistrz/actix-web" }
 actix = "0.7.9"
+tokio-signal = "0.2.7"
