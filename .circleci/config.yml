@@ -1,0 +1,21 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/rust:latest
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Install clippy
+          command: rustup component add clippy-preview
+      - run:
+          name: Build
+          command: cargo build
+      - run:
+          name: Run tests
+          command: cargo test
+      - run:
+          name: Run clippy
+          command: cargo clippy
+
