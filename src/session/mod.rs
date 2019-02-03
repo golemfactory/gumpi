@@ -143,6 +143,7 @@ impl HubSession {
     #[allow(clippy::let_unit_value)]
     fn destroy(&self) -> Fallible<()> {
         let url = format!("http://{}/sessions/{}", self.hub_ip, self.session_id);
+        // TODO get rid of the verbatim json! call
         query_deserialize::<_, ()>(Method::DELETE, &url, json!({}))?;
         //info!("Reply: {}", reply);
         Ok(())
@@ -208,7 +209,7 @@ impl HubSession {
 
     pub fn get_download_cmd(&self, blob_id: BlobId, filename: String) -> Command {
         Command::DownloadFile {
-            uri: format!(
+            url: format!(
                 "http://{}/sessions/{}/blobs/{}",
                 self.hub_ip, self.session_id, blob_id
             ),
@@ -236,7 +237,7 @@ fn query_deserialize_json_fut<T, U>(
     method: actix_web::http::Method,
     url: &str,
     payload: T,
-) -> impl Future<Item = Option<U>, Error = actix_web::Error>
+) -> impl Future<Item = Option<U>, Error = failure::Error>
 where
     T: Serialize,
     for<'a> U: Deserialize<'a>,
@@ -256,19 +257,22 @@ where
         .uri(url)
         .json(&payload)
         .into_future()
+        // TODO add the IP address to the error context
         .and_then(|req| req.send().from_err())
         .and_then(|resp| {
             let status = resp.status();
             match status {
+                // TODO print the raw json in the context
                 StatusCode::NO_CONTENT => None,
                 _ => Some(resp.json().from_err()),
             }
         })
+        .map_err(|e| e.into())
 }
 
-fn wait_ctrlc<F: Future>(future: F) -> Fallible<F::Item>
+fn wait_ctrlc<F>(future: F) -> Fallible<F::Item>
 where
-    F::Error: failure::Fail,
+    F: Future<Error = failure::Error>,
 {
     // TODO we definitely shouldn't create a system for every request
     let mut sys = System::new("gumpi");
@@ -279,7 +283,7 @@ where
     let fut = future.select2(ctrlc);
     sys.block_on(fut)
         .map_err(|e| match e {
-            Either::A((e, _)) => e.into(),
+            Either::A((e, _)) => e,
             _ => panic!("Ctrl-C handling failed"),
         })
         .and_then(|res| match res {
