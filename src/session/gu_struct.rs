@@ -1,6 +1,7 @@
 // structs copied over from gu-net, gu-hardware
 // TODO use submodule and gu-envman-api
 use gu_net::NodeId;
+use serde_derive::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]

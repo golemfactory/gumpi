@@ -7,6 +7,7 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::rc::Rc;
+use log::{debug, info};
 
 mod gu_struct;
 pub mod mpi;
@@ -255,3 +256,4 @@ where
         serde_json::from_str(&content).context(format!("Bad JSON: {}", content))?;
     Ok(resp_content)
 }
+
