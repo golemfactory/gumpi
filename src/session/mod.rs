@@ -34,7 +34,7 @@ impl ProviderSession {
         let payload = json!({
             "image": {
                 "url": "http://52.31.143.91/images/gumpi-image.tar.gz",
-                "hash": "44d65afc45b1a78c3976b6fe42f4dec6253923bb7c671862556f841034d256a0"
+                "hash": "SHA1:61014e38bf1b5cb94f61444e64400163ecbbdb14"
             },
             "name": "monero mining",
             "tags": [],
@@ -170,7 +170,9 @@ impl HubSession {
         // side, but the HTTP request succeeded.
         // Still, if there was an error on the provider side, we want to
         // propagate the error, hence the map_err.
-        let reply: Result<U, String> =
+
+        // TODO HACK what should the error type be
+        let reply: Result<U, serde_json::Value> =
             query_deserialize(Method::POST, &url, payload)?.expect("No content");
         reply.map_err(|err| format_err!("Provider replied: {}", err))
     }
@@ -182,9 +184,27 @@ impl HubSession {
         let blob_id: u64 = query_deserialize(Method::POST, &url, json!({}))?.expect("No content");
         let url = format!("{}/{}", url, blob_id);
         info!("Uploading a file, id = {}", blob_id);
+        debug!("File contents: {}", payload);
 
-        let client = reqwest::Client::new();
-        client.put(&url).body(payload).send()?;
+        let future = ClientRequest::build()
+            .method(Method::PUT)
+            .timeout(Duration::from_secs(60 * 60 * 24 * 366)) // 1 year of timeout
+            .uri(url)
+            .body(&payload)
+            .into_future()
+            // TODO add the IP address to the error context
+            .and_then(|req| req.send().from_err())
+            .map_err(|e| e.into())
+            .and_then(|resp| {
+                let status = resp.status();
+                if status.is_success() {
+                    Ok(())
+                } else {
+                    Err(format_err!("Error uploading a blob: {}", status))
+                }
+            });
+
+        wait_ctrlc(future)?;
 
         info!("Uploaded a file, id = {}", blob_id);
         Ok(blob_id)
@@ -197,19 +217,13 @@ impl HubSession {
 
     fn get_providers(&self) -> Fallible<Vec<PeerInfo>> {
         let url = format!("http://{}/peers", self.hub_ip);
-        let mut reply = reqwest::get(&url)?;
-        let status = reply.status();
-        if status.is_success() {
-            let info = reply.json()?;
-            Ok(info)
-        } else {
-            Err(format_err!("Hub returned an error: {}", status))
-        }
+        let res = query_deserialize(Method::GET, &url, json!({}))?.expect("No content");
+        Ok(res)
     }
 
     pub fn get_download_cmd(&self, blob_id: BlobId, filename: String) -> Command {
         Command::DownloadFile {
-            url: format!(
+            uri: format!(
                 "http://{}/sessions/{}/blobs/{}",
                 self.hub_ip, self.session_id, blob_id
             ),
@@ -227,9 +241,6 @@ impl Drop for HubSession {
 
 type BlobId = u64;
 
-// This function is too general and hacky. Not everything in GU will return a valid JSON.
-// See issue https://github.com/golemfactory/gumpi/issues/9
-//
 // When using this function, the type should be explicitly annotated!
 // This is probably a bug in the Rust compiler
 // see https://github.com/rust-lang/rust/issues/55928
@@ -244,12 +255,6 @@ where
     U: Sync + Send + 'static,
 {
     use actix_web::http::StatusCode;
-
-    debug!(
-        "Payload:\n {}",
-        serde_json::to_string_pretty(&payload)
-            .unwrap_or_else(|_| "serialization failed".to_owned())
-    );
 
     ClientRequest::build()
         .method(method)

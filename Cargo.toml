@@ -5,7 +5,6 @@ authors = ["Marcin Mielniczuk <marmistrz.dev@zoho.eu>"]
 edition = "2018"
 
 [dependencies]
-reqwest = "0.9"
 serde_json = "1.0"
 serde = "1.0"
 failure = "0.1"
