@@ -18,7 +18,7 @@ mod gu_struct;
 pub mod mpi;
 
 use self::gu_struct::*;
-pub use gu_model::envman::Command;
+pub use gu_model::envman::{Command, CreateSession, Image};
 use gu_net::NodeId;
 
 #[derive(Debug)]
@@ -32,17 +32,18 @@ impl ProviderSession {
     pub fn new(hub_session: Rc<HubSession>, peerinfo: PeerInfo) -> Fallible<Self> {
         let node_id = peerinfo.node_id;
         let service = 37;
-        let payload = json!({
-            "image": {
-                "url": "http://52.31.143.91/images/gumpi-image.tar.gz",
-                "hash": "SHA1:61014e38bf1b5cb94f61444e64400163ecbbdb14"
+
+        let payload = CreateSession {
+            env_type: "hd".to_owned(),
+            image: Image {
+                url: "http://52.31.143.91/images/gumpi-image.tar.gz".to_owned(),
+                hash: "SHA1:61014e38bf1b5cb94f61444e64400163ecbbdb14".to_owned(),
             },
-            "name": "monero mining",
-            "tags": [],
-            "note": "None",
-            "envType": "hd"
-        });
-        debug!("payload: {}", payload);
+            name: "gumpi".to_owned(),
+            tags: vec![],
+            note: None,
+            options: (),
+        };
 
         let session_id: String = hub_session
             .post_provider(node_id, service, &payload)
