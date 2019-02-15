@@ -19,6 +19,7 @@ pub mod mpi;
 
 use self::gu_struct::*;
 pub use gu_model::envman::{Command, CreateSession, Image};
+use gu_model::peers::PeerInfo;
 use gu_net::NodeId;
 
 #[derive(Debug)]

@@ -63,13 +63,12 @@ impl SessionMPI {
                 };
 
                 // Use map to handle ip-less peers
-                peer.peerinfo.peer_addr.as_ref().map(|ip_sock| {
-                    let ip_sock: SocketAddr = ip_sock.parse().unwrap_or_else(|_| {
-                        panic!("GU returned an invalid IP address, {}", ip_sock)
-                    });
-                    let ip = ip_sock.ip();
-                    format!("{} port=4222 slots={}", ip, hw.num_cores)
-                })
+                let ip_sock = &peer.peerinfo.peer_addr;
+                let ip_sock: SocketAddr = ip_sock
+                    .parse()
+                    .unwrap_or_else(|_| panic!("GU returned an invalid IP address, {}", ip_sock));
+                let ip = ip_sock.ip();
+                Some(format!("{} port=4222 slots={}", ip, hw.num_cores))
             })
             .collect();
         Ok(file_lines.join("\n"))
