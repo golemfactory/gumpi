@@ -109,10 +109,11 @@ impl ProviderSession {
         Ok(reply)
     }
 
-    // TODO return type?
-    pub fn download(&self, blob_id: BlobId, filename: String) -> Fallible<Vec<String>> {
+    pub fn download(&self, blob_id: BlobId, filename: String) -> Fallible<String> {
         let cmd = self.hub_session.get_download_cmd(blob_id, filename);
-        self.exec_commands(vec![cmd])
+        let mut results = self.exec_commands(vec![cmd])?;
+        assert_eq!(results.len(), 1);
+        Ok(results.swap_remove(0))
     }
 }
 
@@ -173,7 +174,7 @@ impl HubSession {
         // Still, if there was an error on the provider side, we want to
         // propagate the error, hence the map_err.
 
-        // TODO HACK what should the error type be
+        // TODO HACK investigate what should the error type be and get a decent error message
         let reply: Result<U, serde_json::Value> =
             query_deserialize(Method::POST, &url, payload)?.expect("No content");
         reply.map_err(|err| format_err!("Provider replied: {}", err))
@@ -191,10 +192,9 @@ impl HubSession {
         let future = ClientRequest::build()
             .method(Method::PUT)
             .timeout(Duration::from_secs(60 * 60 * 24 * 366)) // 1 year of timeout
-            .uri(url)
+            .uri(&url)
             .body(&payload)
             .into_future()
-            // TODO add the IP address to the error context
             .and_then(|req| req.send().from_err())
             .map_err(|e| e.into())
             .and_then(|resp| {
@@ -206,7 +206,7 @@ impl HubSession {
                 }
             });
 
-        wait_ctrlc(future)?;
+        wait_ctrlc(future).context(format!("connecting to {}", url))?;
 
         info!("Uploaded a file, id = {}", blob_id);
         Ok(blob_id)
@@ -264,7 +264,6 @@ where
         .uri(url)
         .json(&payload)
         .into_future()
-        // TODO add the IP address to the error context
         .and_then(|req| req.send().from_err())
         .and_then(|resp| {
             let status = resp.status();
@@ -281,7 +280,6 @@ fn wait_ctrlc<F>(future: F) -> Fallible<F::Item>
 where
     F: Future<Error = failure::Error>,
 {
-    // TODO we definitely shouldn't create a system for every request
     let mut sys = System::new("gumpi");
     let ctrlc = tokio_signal::ctrl_c()
         .flatten_stream()

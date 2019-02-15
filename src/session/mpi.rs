@@ -53,7 +53,6 @@ impl SessionMPI {
         let file_lines: Vec<_> = peers
             .iter()
             .filter_map(|peer| {
-                // TODO depend on number of procs?
                 let hw = match peer.get_hardware() {
                     Ok(hw) => hw,
                     Err(e) => {
@@ -62,7 +61,6 @@ impl SessionMPI {
                     }
                 };
 
-                // Use map to handle ip-less peers
                 let ip_sock = &peer.peerinfo.peer_addr;
                 let ip_sock: SocketAddr = ip_sock
                     .parse()
@@ -116,10 +114,3 @@ impl SessionMPI {
         Ok(())
     }
 }
-
-// TODO allow specifying build mode in the config
-/*#[derive(PartialEq)]
-pub enum BuildMode {
-    Makefile,
-    CMake,
-}*/
