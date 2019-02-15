@@ -1,11 +1,11 @@
 use failure::{Fallible, ResultExt};
+use serde_derive::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use serde_derive::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JobConfig {

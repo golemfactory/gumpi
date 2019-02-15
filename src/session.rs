@@ -4,6 +4,7 @@ use failure::{format_err, Fallible, ResultExt};
 use futures::future::Either;
 use futures::prelude::*;
 use gu_model::envman::SessionUpdate;
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::convert::Into;
@@ -11,7 +12,6 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::rc::Rc;
-use log::{debug, info};
 use std::time::Duration;
 
 mod gu_struct;
