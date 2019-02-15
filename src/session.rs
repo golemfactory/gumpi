@@ -18,7 +18,7 @@ mod gu_struct;
 pub mod mpi;
 
 use self::gu_struct::*;
-pub use gu_model::envman::{Command, CreateSession, Image};
+pub use gu_model::envman::{Command, CreateSession, DestroySession, Image};
 use gu_model::peers::PeerInfo;
 use gu_net::NodeId;
 
@@ -63,9 +63,9 @@ impl ProviderSession {
     fn destroy(&mut self) -> Fallible<()> {
         let service = 40;
 
-        let payload = json!({
-            "session_id": self.session_id
-        });
+        let payload = DestroySession {
+            session_id: self.session_id.clone(),
+        };
 
         let reply: String = self
             .hub_session
@@ -79,9 +79,8 @@ impl ProviderSession {
     fn get_hardware(&self) -> Fallible<Hardware> {
         let id = self.peerinfo.node_id;
         let service = 19354;
-        let payload = json!(null);
 
-        let hw = self.hub_session.post_provider(id, service, &payload)?;
+        let hw = self.hub_session.post_provider(id, service, &())?;
         Ok(hw)
     }
 
@@ -143,12 +142,9 @@ impl HubSession {
         Ok(session)
     }
 
-    #[allow(clippy::let_unit_value)]
     fn destroy(&self) -> Fallible<()> {
         let url = format!("http://{}/sessions/{}", self.hub_ip, self.session_id);
-        // TODO get rid of the verbatim json! call
-        query_deserialize::<_, ()>(Method::DELETE, &url, json!({}))?;
-        //info!("Reply: {}", reply);
+        query_deserialize::<_, ()>(Method::DELETE, &url, ())?;
         Ok(())
     }
 
@@ -167,7 +163,10 @@ impl HubSession {
             provider.to_string(),
             service
         );
+
+        // corresponds to Envelope from gu_hub/src/peer.rs
         let payload = json!({ "b": json });
+
         // The provider actually returns a Result<U, _>.
         // reply will be Err(_) if an error occurred on the provider
         // side, but the HTTP request succeeded.
@@ -184,7 +183,7 @@ impl HubSession {
     pub fn upload(&self, payload: String) -> Fallible<BlobId> {
         info!("Creating a slot");
         let url = format!("http://{}/sessions/{}/blobs", self.hub_ip, self.session_id);
-        let blob_id: u64 = query_deserialize(Method::POST, &url, json!({}))?.expect("No content");
+        let blob_id: u64 = query_deserialize(Method::POST, &url, ())?.expect("No content");
         let url = format!("{}/{}", url, blob_id);
         info!("Uploading a file, id = {}", blob_id);
         debug!("File contents: {}", payload);
@@ -220,7 +219,7 @@ impl HubSession {
 
     fn get_providers(&self) -> Fallible<Vec<PeerInfo>> {
         let url = format!("http://{}/peers", self.hub_ip);
-        let res = query_deserialize(Method::GET, &url, json!({}))?.expect("No content");
+        let res = query_deserialize(Method::GET, &url, ())?.expect("No content");
         Ok(res)
     }
 
