@@ -44,8 +44,8 @@ impl SessionMPI {
         })
     }
 
-    fn root_provider(&self) -> &ProviderSession {
-        &self.provider_sessions[0]
+    fn root_provider(&self) -> Option<&ProviderSession> {
+        self.provider_sessions.first()
     }
 
     pub fn hostfile(&self) -> Fallible<String> {
@@ -79,7 +79,9 @@ impl SessionMPI {
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,
     ) -> Fallible<()> {
-        let root = self.root_provider();
+        let root = self
+            .root_provider()
+            .expect("encountered empty provider sessions");
         let mut cmdline = vec![];
 
         if let Some(args) = mpiargs {
