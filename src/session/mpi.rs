@@ -1,10 +1,8 @@
 use super::{Command, HubSession, ProviderSession, ResourceFormat};
-use crate::failure_ext::OptionExt;
-use failure::{format_err, Fallible};
+use crate::jobconfig::{BuildType, Sources};
+use failure::{format_err, Fallible, ResultExt};
 use log::{info, warn};
-use std::ffi::OsStr;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::rc::Rc;
 
 pub struct SessionMPI {
@@ -118,21 +116,42 @@ impl SessionMPI {
         Ok(())
     }
 
-    pub fn deploy(&self, sources: &Path) -> Fallible<()> {
-        let name = sources
-            .file_name()
-            .and_then(OsStr::to_str)
-            .ok_or_context("sources is not a valid filename")?;
+    pub fn deploy(&self, sources: &Sources) -> Fallible<()> {
+        let blob_id = self
+            .hub_session
+            .upload_file(&sources.path)
+            .context("uploading file")?;
 
-        let blob_id = self.hub_session.upload_file(sources)?;
         for provider in &self.provider_sessions {
-            provider.download(blob_id, name.to_owned(), ResourceFormat::Tar)?;
-            let exec_cmd = Command::Exec {
+            provider
+                .download(blob_id, "app".to_owned(), ResourceFormat::Tar)
+                .context("downloading file")?;
+
+            let cmake_cmd = Command::Exec {
+                executable: "cmake/bin/cmake".to_owned(),
+                args: vec![
+                    "app",
+                    "-DCMAKE_C_COMPILER=mpicc",
+                    "-DCMAKE_CXX_COMPILER=mpicxx",
+                ]
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            };
+            let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
                 args: vec![],
             };
-            let out = provider.exec_command(exec_cmd)?;
-            info!("Provider {} complation output:\n{}", provider.name(), out);
+
+            let cmds = match &sources.mode {
+                BuildType::Make => vec![make_cmd],
+                BuildType::CMake => vec![cmake_cmd, make_cmd],
+            };
+
+            let out = provider.exec_commands(cmds)?;
+            for out in out {
+                info!("Provider {} compilation output:\n{}", provider.name(), out);
+            }
         }
         Ok(())
     }
