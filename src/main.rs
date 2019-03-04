@@ -36,7 +36,6 @@ fn run() -> Fallible<()> {
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
     let mgr = SessionMPI::init(opt.hub)?;
-    println!("HOSTFILE:\n{}", mgr.hostfile()?);
     mgr.exec(opt.numproc, config.progname, config.args, config.mpiargs)?;
 
     Ok(())
