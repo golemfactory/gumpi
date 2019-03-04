@@ -196,7 +196,7 @@ impl HubSession {
             .body(&payload)
             .into_future()
             .and_then(|req| req.send().from_err())
-            .map_err(|e| e.into())
+            .map_err(Into::into)
             .and_then(|resp| {
                 let status = resp.status();
                 if status.is_success() {
@@ -273,7 +273,7 @@ where
                 _ => Some(resp.json().from_err()),
             }
         })
-        .map_err(|e| e.into())
+        .map_err(Into::into)
 }
 
 fn wait_ctrlc<F>(future: F) -> Fallible<F::Item>
