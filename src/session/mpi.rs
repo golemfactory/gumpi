@@ -1,7 +1,10 @@
-use super::{Command, HubSession, ProviderSession};
+use super::{Command, HubSession, ProviderSession, ResourceFormat};
+use crate::failure_ext::OptionExt;
 use failure::{format_err, Fallible};
 use log::{info, warn};
+use std::ffi::OsStr;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::rc::Rc;
 
 pub struct SessionMPI {
@@ -95,9 +98,10 @@ impl SessionMPI {
         cmdline.extend(args.into_iter().map(T::into));
 
         let hostfile = self.hostfile()?;
+        info!("HOSTFILE:\n{}", hostfile);
         let blob_id = self.hub_session.upload(hostfile)?;
         info!("Downloading the hostfile...");
-        let download_output = root.download(blob_id, "hostfile".to_owned());
+        let download_output = root.download(blob_id, "hostfile".to_owned(), ResourceFormat::Raw);
         info!("Downloaded: {:?}", download_output);
 
         info!("Executing mpirun with args {:?}...", cmdline);
@@ -110,6 +114,25 @@ impl SessionMPI {
         println!("Output:");
         for out in ret {
             println!("{}\n========================", out);
+        }
+        Ok(())
+    }
+
+    pub fn deploy(&self, sources: &Path) -> Fallible<()> {
+        let name = sources
+            .file_name()
+            .and_then(OsStr::to_str)
+            .ok_or_context("sources is not a valid filename")?;
+
+        let blob_id = self.hub_session.upload_file(sources)?;
+        for provider in &self.provider_sessions {
+            provider.download(blob_id, name.to_owned(), ResourceFormat::Tar)?;
+            let exec_cmd = Command::Exec {
+                executable: "make".to_owned(),
+                args: vec![],
+            };
+            let out = provider.exec_command(exec_cmd)?;
+            info!("Provider {} complation output:\n{}", provider.name(), out);
         }
         Ok(())
     }

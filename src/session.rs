@@ -18,7 +18,7 @@ mod gu_struct;
 pub mod mpi;
 
 use self::gu_struct::*;
-pub use gu_model::envman::{Command, CreateSession, DestroySession, Image};
+pub use gu_model::envman::{Command, CreateSession, DestroySession, Image, ResourceFormat};
 use gu_model::peers::PeerInfo;
 use gu_net::NodeId;
 
@@ -109,11 +109,24 @@ impl ProviderSession {
         Ok(reply)
     }
 
-    pub fn download(&self, blob_id: BlobId, filename: String) -> Fallible<String> {
-        let cmd = self.hub_session.get_download_cmd(blob_id, filename);
+    fn exec_command(&self, cmd: Command) -> Fallible<String> {
         let mut results = self.exec_commands(vec![cmd])?;
-        assert_eq!(results.len(), 1);
+        assert_eq!(results.len(), 1, "expected only one output of the command");
         Ok(results.swap_remove(0))
+    }
+
+    pub fn download(
+        &self,
+        blob_id: BlobId,
+        filename: String,
+        fmt: ResourceFormat,
+    ) -> Fallible<String> {
+        let cmd = self.hub_session.get_download_cmd(blob_id, filename, fmt);
+        self.exec_command(cmd)
+    }
+
+    pub fn name(&self) -> &str {
+        &self.peerinfo.peer_addr
     }
 }
 
@@ -223,14 +236,19 @@ impl HubSession {
         Ok(res)
     }
 
-    pub fn get_download_cmd(&self, blob_id: BlobId, filename: String) -> Command {
+    pub fn get_download_cmd(
+        &self,
+        blob_id: BlobId,
+        filename: String,
+        fmt: ResourceFormat,
+    ) -> Command {
         Command::DownloadFile {
             uri: format!(
                 "http://{}/sessions/{}/blobs/{}",
                 self.hub_ip, self.session_id, blob_id
             ),
             file_path: filename,
-            format: Default::default(),
+            format: fmt,
         }
     }
 }
