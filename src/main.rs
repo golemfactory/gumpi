@@ -38,7 +38,7 @@ fn run() -> Fallible<()> {
     let mgr = SessionMPI::init(opt.hub)?;
 
     if let Some(sources) = config.sources {
-        mgr.deploy(&sources)?;
+        mgr.deploy(opt.jobconfig.parent().unwrap(), &sources)?;
     }
     mgr.exec(opt.numproc, config.progname, config.args, config.mpiargs)?;
 

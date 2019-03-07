@@ -3,6 +3,7 @@ use crate::jobconfig::{BuildType, Sources};
 use failure::{format_err, Fallible, ResultExt};
 use log::{info, warn};
 use std::net::SocketAddr;
+use std::path::Path;
 use std::rc::Rc;
 
 pub struct SessionMPI {
@@ -116,10 +117,12 @@ impl SessionMPI {
         Ok(())
     }
 
-    pub fn deploy(&self, sources: &Sources) -> Fallible<()> {
+    pub fn deploy(&self, config_path: &Path, sources: &Sources) -> Fallible<()> {
+        let tarball_path = config_path.join(&sources.path);
+
         let blob_id = self
             .hub_session
-            .upload_file(&sources.path)
+            .upload_file(&tarball_path)
             .context("uploading file")?;
 
         for provider in &self.provider_sessions {
