@@ -136,6 +136,7 @@ impl SessionMPI {
                     "app",
                     "-DCMAKE_C_COMPILER=mpicc",
                     "-DCMAKE_CXX_COMPILER=mpicxx",
+                    "-DCMAKE_BUILD_TYPE=Release",
                 ]
                 .into_iter()
                 .map(String::from)
