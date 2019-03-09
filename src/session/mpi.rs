@@ -151,7 +151,9 @@ impl SessionMPI {
                 BuildType::CMake => vec![cmake_cmd, make_cmd],
             };
 
-            let out = provider.exec_commands(cmds)?;
+            let out = provider
+                .exec_commands(cmds)
+                .context(format!("compiling the app on node {}", provider.name()))?;
             for out in out {
                 info!("Provider {} compilation output:\n{}", provider.name(), out);
             }
