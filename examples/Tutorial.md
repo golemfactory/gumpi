@@ -48,3 +48,8 @@ Unfortunately, this is not the case with generic Makefiles.
 Since the application sources are put into the `app` subdirectory, there are two possible approaches. Either:
 * make sure that your makefile will create the executable in the parent directory
 * if your `progname` is `foo`, just prepend `app/`, in this example `progname` should become `app/foo`
+
+# Compilation options
+
+The binaries will be built separately on each node, so you may freely use the
+`-march=native` compilation option to apply hardware-specific optimizations.
