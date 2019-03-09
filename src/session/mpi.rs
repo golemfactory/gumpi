@@ -95,6 +95,7 @@ impl SessionMPI {
         cmdline.extend(args.into_iter().map(T::into));
 
         let hostfile = self.hostfile()?;
+        info!("HOSTFILE:\n{}", hostfile);
         let blob_id = self.hub_session.upload(hostfile)?;
         info!("Downloading the hostfile...");
         let download_output = root.download(blob_id, "hostfile".to_owned());
