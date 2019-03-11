@@ -27,7 +27,7 @@ progname = "uname"
 args = ["-a"]
 ```
 
-See [examples/Tutorial.md] for a more details.
+See [examples/Tutorial.md](examples/Tutorial.md) for a more details.
 
 # Known issues
 If you want to run the application over LAN, you may need to specify your IP address space, e.g. the previous example will become:
