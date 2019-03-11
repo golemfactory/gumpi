@@ -1,18 +1,12 @@
 use actix::prelude::*;
 use actix_web::{client::ClientRequest, http::Method, HttpMessage};
 use failure::{format_err, Fallible, ResultExt};
-use futures::future::Either;
-use futures::prelude::*;
+use futures::{future::Either, prelude::*};
 use gu_model::envman::SessionUpdate;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::convert::Into;
-use std::fs;
-use std::net::SocketAddr;
-use std::path::Path;
-use std::rc::Rc;
-use std::time::Duration;
+use std::{convert::Into, fs, net::SocketAddr, path::Path, rc::Rc, time::Duration};
 
 mod gu_struct;
 pub mod mpi;

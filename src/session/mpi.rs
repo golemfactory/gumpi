@@ -2,9 +2,7 @@ use super::{Command, HubSession, ProviderSession, ResourceFormat};
 use crate::jobconfig::{BuildType, Sources};
 use failure::{format_err, Fallible, ResultExt};
 use log::{info, warn};
-use std::net::SocketAddr;
-use std::path::Path;
-use std::rc::Rc;
+use std::{net::SocketAddr, path::Path, rc::Rc};
 
 pub struct SessionMPI {
     provider_sessions: Vec<ProviderSession>,

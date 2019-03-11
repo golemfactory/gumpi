@@ -1,10 +1,11 @@
 use failure::{Fallible, ResultExt};
 use serde_derive::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::Read;
-use std::net::SocketAddr;
-use std::path::Path;
-use std::path::PathBuf;
+use std::{
+    fs::File,
+    io::Read,
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 use structopt::StructOpt;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
