@@ -6,7 +6,7 @@ use gu_model::envman::SessionUpdate;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{convert::Into, fs, net::SocketAddr, path::Path, rc::Rc, time::Duration};
+use std::{convert::Into, fmt, fs, net::SocketAddr, path::Path, rc::Rc, time::Duration};
 
 mod gu_struct;
 pub mod mpi;
@@ -261,6 +261,30 @@ impl Drop for HubSession {
 
 type BlobId = u64;
 
+#[derive(Debug)]
+pub struct DeserializationError {
+    error: serde_json::Error,
+    raw_text: String,
+}
+
+impl DeserializationError {
+    pub fn new(error: serde_json::Error, raw_text: String) -> Self {
+        Self { error, raw_text }
+    }
+}
+
+impl std::fmt::Display for DeserializationError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        write!(
+            fmt,
+            "Deserialization failed: {}\nOriginal string:\n{}",
+            self.error, self.raw_text
+        )
+    }
+}
+
+impl failure::Fail for DeserializationError {}
+
 // When using this function, the type should be explicitly annotated!
 // This is probably a bug in the Rust compiler
 // see https://github.com/rust-lang/rust/issues/55928
@@ -283,15 +307,25 @@ where
         .json(&payload)
         .into_future()
         .and_then(|req| req.send().from_err())
+        .map_err(failure::Error::from)
         .and_then(|resp| {
             let status = resp.status();
             match status {
-                // TODO print the raw json in the context
                 StatusCode::NO_CONTENT => None,
-                _ => Some(resp.json().from_err()),
+                _ => Some(
+                    resp.body()
+                        .limit(1024 * 1024 * 1024) // maximum payload: 1 GiB
+                        .from_err()
+                        .and_then(|bytes| {
+                            String::from_utf8(bytes.to_vec()).map_err(failure::Error::from)
+                        })
+                        .and_then(|body: String| {
+                            serde_json::from_str(&body)
+                                .map_err(|err| DeserializationError::new(err, body).into())
+                        }),
+                ),
             }
         })
-        .map_err(Into::into)
 }
 
 fn wait_ctrlc<F>(future: F) -> Fallible<F::Item>
