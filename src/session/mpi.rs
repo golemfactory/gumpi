@@ -1,7 +1,9 @@
-use super::{Command, HubSession, ProviderSession};
-use failure::{format_err, Fallible};
+use super::{Command, HubSession, ProviderSession, ResourceFormat};
+use crate::jobconfig::{BuildType, Sources};
+use failure::{format_err, Fallible, ResultExt};
 use log::{info, warn};
 use std::net::SocketAddr;
+use std::path::Path;
 use std::rc::Rc;
 
 pub struct SessionMPI {
@@ -98,7 +100,7 @@ impl SessionMPI {
         info!("HOSTFILE:\n{}", hostfile);
         let blob_id = self.hub_session.upload(hostfile)?;
         info!("Downloading the hostfile...");
-        let download_output = root.download(blob_id, "hostfile".to_owned());
+        let download_output = root.download(blob_id, "hostfile".to_owned(), ResourceFormat::Raw);
         info!("Downloaded: {:?}", download_output);
 
         info!("Executing mpirun with args {:?}...", cmdline);
@@ -111,6 +113,51 @@ impl SessionMPI {
         println!("Output:");
         for out in ret {
             println!("{}\n========================", out);
+        }
+        Ok(())
+    }
+
+    pub fn deploy(&self, config_path: &Path, sources: &Sources) -> Fallible<()> {
+        let tarball_path = config_path.join(&sources.path);
+
+        let blob_id = self
+            .hub_session
+            .upload_file(&tarball_path)
+            .context("uploading file")?;
+
+        for provider in &self.provider_sessions {
+            provider
+                .download(blob_id, "app".to_owned(), ResourceFormat::Tar)
+                .context("downloading file")?;
+
+            let cmake_cmd = Command::Exec {
+                executable: "cmake/bin/cmake".to_owned(),
+                args: vec![
+                    "app",
+                    "-DCMAKE_C_COMPILER=mpicc",
+                    "-DCMAKE_CXX_COMPILER=mpicxx",
+                    "-DCMAKE_BUILD_TYPE=Release",
+                ]
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            };
+            let make_cmd = Command::Exec {
+                executable: "make".to_owned(),
+                args: vec![],
+            };
+
+            let cmds = match &sources.mode {
+                BuildType::Make => vec![make_cmd],
+                BuildType::CMake => vec![cmake_cmd, make_cmd],
+            };
+
+            let out = provider
+                .exec_commands(cmds)
+                .context(format!("compiling the app on node {}", provider.name()))?;
+            for out in out {
+                info!("Provider {} compilation output:\n{}", provider.name(), out);
+            }
         }
         Ok(())
     }

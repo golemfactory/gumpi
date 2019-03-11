@@ -18,7 +18,7 @@ mod gu_struct;
 pub mod mpi;
 
 use self::gu_struct::*;
-pub use gu_model::envman::{Command, CreateSession, DestroySession, Image};
+pub use gu_model::envman::{Command, CreateSession, DestroySession, Image, ResourceFormat};
 use gu_model::peers::PeerInfo;
 use gu_net::NodeId;
 
@@ -29,6 +29,9 @@ struct ProviderSession {
     hub_session: Rc<HubSession>,
 }
 
+const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image.hdi";
+const GUMPI_IMAGE_SHA1: &str = "a5749cd49c2fdc495c2871e2bd5a54eaf9882d2a";
+
 impl ProviderSession {
     pub fn new(hub_session: Rc<HubSession>, peerinfo: PeerInfo) -> Fallible<Self> {
         let node_id = peerinfo.node_id;
@@ -37,8 +40,8 @@ impl ProviderSession {
         let payload = CreateSession {
             env_type: "hd".to_owned(),
             image: Image {
-                url: "http://52.31.143.91/images/gumpi-image.tar.gz".to_owned(),
-                hash: "SHA1:61014e38bf1b5cb94f61444e64400163ecbbdb14".to_owned(),
+                url: GUMPI_IMAGE_URL.to_owned(),
+                hash: format!("SHA1:{}", GUMPI_IMAGE_SHA1),
             },
             name: "gumpi".to_owned(),
             tags: vec![],
@@ -109,11 +112,24 @@ impl ProviderSession {
         Ok(reply)
     }
 
-    pub fn download(&self, blob_id: BlobId, filename: String) -> Fallible<String> {
-        let cmd = self.hub_session.get_download_cmd(blob_id, filename);
+    fn exec_command(&self, cmd: Command) -> Fallible<String> {
         let mut results = self.exec_commands(vec![cmd])?;
-        assert_eq!(results.len(), 1);
+        assert_eq!(results.len(), 1, "expected only one output of the command");
         Ok(results.swap_remove(0))
+    }
+
+    pub fn download(
+        &self,
+        blob_id: BlobId,
+        filename: String,
+        fmt: ResourceFormat,
+    ) -> Fallible<String> {
+        let cmd = self.hub_session.get_download_cmd(blob_id, filename, fmt);
+        self.exec_command(cmd)
+    }
+
+    pub fn name(&self) -> &str {
+        &self.peerinfo.peer_addr
     }
 }
 
@@ -213,7 +229,10 @@ impl HubSession {
     }
 
     pub fn upload_file(&self, file: &Path) -> Fallible<BlobId> {
-        let data = fs::read_to_string(file).context("reading the file")?;
+        let data = fs::read_to_string(file).context(format!(
+            "reading file: {}",
+            file.to_str().expect("file is an invalid UTF-8")
+        ))?;
         self.upload(data)
     }
 
@@ -223,14 +242,19 @@ impl HubSession {
         Ok(res)
     }
 
-    pub fn get_download_cmd(&self, blob_id: BlobId, filename: String) -> Command {
+    pub fn get_download_cmd(
+        &self,
+        blob_id: BlobId,
+        filename: String,
+        fmt: ResourceFormat,
+    ) -> Command {
         Command::DownloadFile {
             uri: format!(
                 "http://{}/sessions/{}/blobs/{}",
                 self.hub_ip, self.session_id, blob_id
             ),
             file_path: filename,
-            format: Default::default(),
+            format: fmt,
         }
     }
 }

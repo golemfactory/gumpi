@@ -1,0 +1,14 @@
+# the name of the binary that will be produced
+progname = "game-life"
+# the command line arguments that should be passed to the program
+args = ["4", "3", "12000", "10"]
+# (optional) extra arguments that should be passed to mpirun
+mpiargs = ["--mca", "btl_tcp_if_include", "10.30.8.0/22"]
+
+# (optional) configuration of the sources to be built on the provider machine
+# if missing, gumpi will assume that the binary is already present on the machine
+[sources]
+# path to the tarball containing the sources
+path = "game-life.tar"
+# build system. Supported: "Make" or "CMake"
+mode = "CMake"
