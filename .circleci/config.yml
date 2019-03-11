@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/rust:latest
+      - image: circleci/rust:1.32
     steps:
       - checkout
       - setup_remote_docker
