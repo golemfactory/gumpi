@@ -38,6 +38,9 @@ fn run() -> Fallible<()> {
     let mgr = SessionMPI::init(opt.hub)?;
 
     if let Some(sources) = config.sources {
+        // It's safe to call unwrap here - at this point opt.jobconfig
+        // is guaranteed to be a valid filepath, which is checked by
+        // JobConfig::from_file
         mgr.deploy(opt.jobconfig.parent().unwrap(), &sources)
             .context("deploying the sources")?;
     }
