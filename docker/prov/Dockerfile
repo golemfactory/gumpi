@@ -47,11 +47,12 @@ RUN chmod -R 600 ${SSHDIR}* && \
     chown -R ${USER}:${USER} ${SSHDIR} && \
     chown -R ${USER}:${USER} ${HOME}/.cargo && \
     chown ${USER}:${USER} ${HOME}
+USER $USER
 
 COPY --from=build /usr/local/cargo/bin/gu-provider /usr/bin/gu-provider
 WORKDIR /opt/provider
 ENV RUST_LOG=info
-ENTRYPOINT [ "/usr/bin/gu-provider" ]
-CMD [ "server", "run" ]
-
+CMD (/usr/sbin/sshd -D & \
+	/usr/bin/gu-provider server run \
+)
 

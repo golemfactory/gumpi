@@ -1,10 +1,14 @@
-version: '3.2'
+version: '2.3'
 services:
         hub:
-                build: hub
+                build: 
+                        context: ..
+                        dockerfile: docker/hub/Dockerfile
         prov:
                 build: prov
                 privileged: true
-
-
-
+                cpu_count: 1
+                scale: 4
+                volumes:
+                        - ./cpuinfo:/proc/cpuinfo:ro
+                          
