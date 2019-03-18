@@ -14,8 +14,8 @@ structopt = "0.2"
 dirs = "1.0"
 serde_derive = "1.0"
 toml = "0.4.8"
-gu-net = { git = "https://github.com/golemfactory/golem-unlimited", branch = "gumpi-ethsign" }
-gu-model = { git = "https://github.com/golemfactory/golem-unlimited", branch = "gumpi-ethsign" }
+gu-net = { git = "https://github.com/golemfactory/golem-unlimited", branch = "gumpi-freeze" }
+gu-model = { git = "https://github.com/golemfactory/golem-unlimited", branch = "gumpi-freeze" }
 tokio = "0.1.14"
 futures = "0.1.25"
 actix-web = { git = "https://github.com/marmistrz/actix-web" }
