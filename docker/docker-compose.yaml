@@ -1,0 +1,10 @@
+version: '3.2'
+services:
+        hub:
+                build: hub
+        prov:
+                build: prov
+                privileged: true
+
+
+
