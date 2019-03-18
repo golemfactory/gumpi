@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+mod actix;
 mod failure_ext;
 mod jobconfig;
 mod session;
@@ -45,6 +46,9 @@ fn run() -> Fallible<()> {
             .context("deploying the sources")?;
     }
     mgr.exec(opt.numproc, config.progname, config.args, config.mpiargs)?;
+    if let Some(output_path) = config.output_path {
+        mgr.retrieve_output(&output_path)?;
+    }
 
     Ok(())
 }

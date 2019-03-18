@@ -26,6 +26,7 @@ pub struct JobConfig {
     pub args: Vec<String>,
     pub mpiargs: Option<Vec<String>>,
     pub sources: Option<Sources>,
+    pub output_path: Option<PathBuf>,
 }
 
 impl JobConfig {

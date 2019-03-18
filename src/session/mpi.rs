@@ -1,6 +1,12 @@
 use super::{Command, HubSession, ProviderSession, ResourceFormat};
-use crate::jobconfig::{BuildType, Sources};
+use crate::{
+    actix::wait_ctrlc,
+    failure_ext::OptionExt,
+    jobconfig::{BuildType, Sources},
+};
+use actix_web::client;
 use failure::{format_err, Fallible, ResultExt};
+use futures::prelude::*;
 use log::{info, warn};
 use std::{net::SocketAddr, path::Path, rc::Rc};
 
@@ -157,6 +163,34 @@ impl SessionMPI {
                 info!("Provider {} compilation output:\n{}", provider.name(), out);
             }
         }
+        Ok(())
+    }
+
+    pub fn retrieve_output(&self, output_path: &Path) -> Fallible<()> {
+        // upload the file from the provider onto the hub
+        let (url, _) = self.hub_session.reserve_blob()?;
+        let path = output_path
+            .to_str()
+            .ok_or_context("output_path is not valid unicode")?
+            .to_owned();
+        let out_log = self
+            .root_provider()
+            .upload(url.clone(), path, ResourceFormat::Tar)?;
+        info!("File uploaded: {}", out_log);
+
+        let future = client::ClientRequest::get(url) // <- Create request builder
+            .finish()
+            .unwrap()
+            .send()
+            .map_err(failure::Error::from)
+            .and_then(|response| {
+                // <- server http response
+                println!("Response: {:?}", response);
+                Ok(())
+            });
+        let output = wait_ctrlc(future);
+
+        // download
         Ok(())
     }
 }
