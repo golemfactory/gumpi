@@ -1,12 +1,13 @@
 use actix::prelude::*;
 use actix_web::{client::ClientRequest, http::Method, HttpMessage};
-use failure::{format_err, Fallible, ResultExt};
+use bytes::Bytes;
+use failure::{format_err, Fail, Fallible, ResultExt};
 use futures::{future::Either, prelude::*};
 use gu_model::envman::SessionUpdate;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{convert::Into, fmt, fs, net::SocketAddr, path::Path, rc::Rc, time::Duration};
+use std::{convert::Into, fmt, fs, net::SocketAddr, path::Path, rc::Rc, str, time::Duration};
 
 mod gu_struct;
 pub mod mpi;
@@ -261,29 +262,33 @@ impl Drop for HubSession {
 
 type BlobId = u64;
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
+#[fail(
+    display = "Deserialization failed: {}. Original string: {}",
+    error, raw_json
+)]
 pub struct DeserializationError {
     error: serde_json::Error,
-    raw_text: String,
+    raw_json: DisplayBytes,
+}
+
+#[derive(Debug)]
+pub struct DisplayBytes(Bytes);
+impl std::fmt::Display for DisplayBytes {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        match str::from_utf8(&self.0) {
+            Ok(s) => write!(fmt, "{}", s),
+            Err(e) => write!(fmt, "data was not valid UTF-8: {}", e),
+        }
+    }
 }
 
 impl DeserializationError {
-    pub fn new(error: serde_json::Error, raw_text: String) -> Self {
-        Self { error, raw_text }
+    pub fn new(error: serde_json::Error, raw_json: Bytes) -> Self {
+        let raw_json = DisplayBytes(raw_json);
+        Self { error, raw_json }
     }
 }
-
-impl std::fmt::Display for DeserializationError {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
-        write!(
-            fmt,
-            "Deserialization failed: {}\nOriginal string:\n{}",
-            self.error, self.raw_text
-        )
-    }
-}
-
-impl failure::Fail for DeserializationError {}
 
 // When using this function, the type should be explicitly annotated!
 // This is probably a bug in the Rust compiler
@@ -307,7 +312,7 @@ where
         .json(&payload)
         .into_future()
         .and_then(|req| req.send().from_err())
-        .map_err(failure::Error::from)
+        .from_err()
         .and_then(|resp| {
             let status = resp.status();
             match status {
@@ -317,11 +322,8 @@ where
                         .limit(1024 * 1024 * 1024) // maximum payload: 1 GiB
                         .from_err()
                         .and_then(|bytes| {
-                            String::from_utf8(bytes.to_vec()).map_err(failure::Error::from)
-                        })
-                        .and_then(|body: String| {
-                            serde_json::from_str(&body)
-                                .map_err(|err| DeserializationError::new(err, body).into())
+                            serde_json::from_slice(bytes.as_ref())
+                                .map_err(|err| DeserializationError::new(err, bytes).into())
                         }),
                 ),
             }
