@@ -267,13 +267,14 @@ type BlobId = u64;
     display = "Deserialization failed: {}. Original string: {}",
     error, raw_json
 )]
-pub struct DeserializationError {
+struct DeserializationError {
+    #[fail(cause)]
     error: serde_json::Error,
     raw_json: DisplayBytes,
 }
 
 #[derive(Debug)]
-pub struct DisplayBytes(Bytes);
+struct DisplayBytes(Bytes);
 impl std::fmt::Display for DisplayBytes {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         match str::from_utf8(&self.0) {
@@ -284,7 +285,7 @@ impl std::fmt::Display for DisplayBytes {
 }
 
 impl DeserializationError {
-    pub fn new(error: serde_json::Error, raw_json: Bytes) -> Self {
+    fn new(error: serde_json::Error, raw_json: Bytes) -> Self {
         let raw_json = DisplayBytes(raw_json);
         Self { error, raw_json }
     }
