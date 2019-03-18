@@ -5,7 +5,7 @@ name = "gumpi"
 version = "0.1.0"
 [dependencies]
 actix = "0.7.9"
-bytes = "*"
+bytes = "0.4.12"
 dirs = "1.0"
 env_logger = "0.6"
 failure = "0.1"
@@ -23,9 +23,9 @@ toml = "0.4.8"
 git = "https://github.com/marmistrz/actix-web"
 
 [dependencies.gu-model]
-branch = "gumpi-ethsign"
+branch = "gumpi-freeze"
 git = "https://github.com/golemfactory/golem-unlimited"
 
 [dependencies.gu-net]
-branch = "gumpi-ethsign"
+branch = "gumpi-freeze"
 git = "https://github.com/golemfactory/golem-unlimited"

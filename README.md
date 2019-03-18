@@ -1,7 +1,7 @@
 # gumpi
 CircleCI status: [![status](https://circleci.com/gh/golemfactory/gumpi.svg?style=svg)](https://circleci.com/gh/golemfactory/gumpi)
 
-Known to work with [this GU version](https://github.com/golemfactory/golem-unlimited/commit/6f910289c03d916ad3d3683be2f05454f099082a).
+Known to work with [this GU version](https://github.com/golemfactory/golem-unlimited/tree/gumpi-freeze), commit 93c9f37e1765ad743a6b16209561e6374fb88e84.
 
 Minimum supported version:
 * Rust: 1.32
