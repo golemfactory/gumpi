@@ -4,11 +4,11 @@ use crate::{
     failure_ext::OptionExt,
     jobconfig::{BuildType, Sources},
 };
-use actix_web::client;
+use actix_web::{client, HttpMessage};
 use failure::{format_err, Fallible, ResultExt};
 use futures::prelude::*;
-use log::{info, warn};
-use std::{net::SocketAddr, path::Path, rc::Rc};
+use log::{error, info, warn};
+use std::{fs, net::SocketAddr, path::Path, rc::Rc};
 
 pub struct SessionMPI {
     provider_sessions: Vec<ProviderSession>,
@@ -168,6 +168,7 @@ impl SessionMPI {
 
     pub fn retrieve_output(&self, output_path: &Path) -> Fallible<()> {
         // upload the file from the provider onto the hub
+        info!("Uploading the job output onto the hub");
         let (url, _) = self.hub_session.reserve_blob()?;
         let path = output_path
             .to_str()
@@ -178,19 +179,27 @@ impl SessionMPI {
             .upload(url.clone(), path, ResourceFormat::Tar)?;
         info!("File uploaded: {}", out_log);
 
+        info!("Downloading the outputs from the hub");
         let future = client::ClientRequest::get(url) // <- Create request builder
             .finish()
             .unwrap()
             .send()
             .map_err(failure::Error::from)
             .and_then(|response| {
-                // <- server http response
                 println!("Response: {:?}", response);
-                Ok(())
+                let status = response.status();
+                if !status.is_success() {
+                    error!("Heck, an error, please FIXME");
+                }
+                response.body().limit(1024 * 1024 * 1024).from_err()
             });
-        let output = wait_ctrlc(future);
+        let output = wait_ctrlc(future).context("Downloading the file")?;
 
-        // download
+        info!("Writing the outputs...");
+        let output_file = "job_outputs.tar";
+        fs::write(output_file, output).context("Writing the outputs")?;
+        info!("Outputs written to {}", output_file);
+
         Ok(())
     }
 }
