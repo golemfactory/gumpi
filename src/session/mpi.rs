@@ -2,7 +2,7 @@ use super::{Command, HubSession, ProviderSession, ResourceFormat};
 use crate::{
     actix::wait_ctrlc,
     failure_ext::OptionExt,
-    jobconfig::{BuildType, Sources},
+    jobconfig::{BuildType, OutputConfig, Sources},
 };
 use actix_web::{client, HttpMessage};
 use failure::{format_err, Fallible, ResultExt};
@@ -166,11 +166,12 @@ impl SessionMPI {
         Ok(())
     }
 
-    pub fn retrieve_output(&self, output_path: &Path) -> Fallible<()> {
+    pub fn retrieve_output(&self, output_cfg: &OutputConfig) -> Fallible<()> {
         // upload the file from the provider onto the hub
         info!("Uploading the job output onto the hub");
         let (url, _) = self.hub_session.reserve_blob()?;
-        let path = output_path
+        let path = output_cfg
+            .source
             .to_str()
             .ok_or_context("output_path is not valid unicode")?
             .to_owned();
@@ -180,25 +181,24 @@ impl SessionMPI {
         info!("File uploaded: {}", out_log);
 
         info!("Downloading the outputs from the hub");
-        let future = client::ClientRequest::get(url) // <- Create request builder
+        let future = client::ClientRequest::get(url)
             .finish()
             .unwrap()
             .send()
-            .map_err(failure::Error::from)
+            .from_err()
             .and_then(|response| {
-                println!("Response: {:?}", response);
                 let status = response.status();
                 if !status.is_success() {
                     error!("Heck, an error, please FIXME");
                 }
-                response.body().limit(1024 * 1024 * 1024).from_err()
+                response.body().limit(1024 * 1024 * 1024).from_err() // 1 GiB limit
             });
         let output = wait_ctrlc(future).context("Downloading the file")?;
 
         info!("Writing the outputs...");
-        let output_file = "job_outputs.tar";
+        let output_file = &output_cfg.target;
         fs::write(output_file, output).context("Writing the outputs")?;
-        info!("Outputs written to {}", output_file);
+        info!("Outputs written to {}", output_file.to_string_lossy());
 
         Ok(())
     }

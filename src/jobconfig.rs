@@ -21,12 +21,18 @@ pub struct Sources {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct OutputConfig {
+    pub source: PathBuf,
+    pub target: PathBuf,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct JobConfig {
     pub progname: String,
     pub args: Vec<String>,
     pub mpiargs: Option<Vec<String>>,
     pub sources: Option<Sources>,
-    pub output_path: Option<PathBuf>,
+    pub output: Option<OutputConfig>,
 }
 
 impl JobConfig {

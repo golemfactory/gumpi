@@ -2,7 +2,7 @@ use crate::actix::wait_ctrlc;
 use actix_web::{client::ClientRequest, http::Method, HttpMessage};
 use bytes::Bytes;
 use failure::{format_err, Fail, Fallible, ResultExt};
-use futures::{future::Either, prelude::*};
+use futures::prelude::*;
 use gu_model::envman::SessionUpdate;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -142,12 +142,12 @@ impl ProviderSession {
     }
 }
 
-// impl Drop for ProviderSession {
-//     fn drop(&mut self) {
-//         self.destroy()
-//             .expect("Destroying the provider session failed");
-//     }
-// }
+impl Drop for ProviderSession {
+    fn drop(&mut self) {
+        self.destroy()
+            .expect("Destroying the provider session failed");
+    }
+}
 
 #[derive(Debug)]
 struct HubSession {
@@ -273,11 +273,11 @@ impl HubSession {
     }
 }
 
-// impl Drop for HubSession {
-//     fn drop(&mut self) {
-//         self.destroy().expect("Destroying the hub session failed");
-//     }
-// }
+impl Drop for HubSession {
+    fn drop(&mut self) {
+        self.destroy().expect("Destroying the hub session failed");
+    }
+}
 
 type BlobId = u64;
 

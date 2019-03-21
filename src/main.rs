@@ -46,8 +46,8 @@ fn run() -> Fallible<()> {
             .context("deploying the sources")?;
     }
     mgr.exec(opt.numproc, config.progname, config.args, config.mpiargs)?;
-    if let Some(output_path) = config.output_path {
-        mgr.retrieve_output(&output_path)?;
+    if let Some(output) = config.output {
+        mgr.retrieve_output(&output)?;
     }
 
     Ok(())
