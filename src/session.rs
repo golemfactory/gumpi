@@ -128,6 +128,7 @@ impl ProviderSession {
     }
 }
 
+#[cfg(not(feature = "clean_session"))]
 impl Drop for ProviderSession {
     fn drop(&mut self) {
         self.destroy()
@@ -254,6 +255,7 @@ impl HubSession {
     }
 }
 
+#[cfg(not(feature = "clean_session"))]
 impl Drop for HubSession {
     fn drop(&mut self) {
         self.destroy().expect("Destroying the hub session failed");
