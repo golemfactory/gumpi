@@ -24,8 +24,8 @@ struct ProviderSession {
     hub_session: Rc<HubSession>,
 }
 
-const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image.hdi";
-const GUMPI_IMAGE_SHA1: &str = "a5749cd49c2fdc495c2871e2bd5a54eaf9882d2a";
+const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image-test.hdi";
+const GUMPI_IMAGE_SHA1: &str = "367c891fb2fc603ab36fae67e8cfe1d1e8c28ff8";
 
 impl ProviderSession {
     pub fn new(hub_session: Rc<HubSession>, peerinfo: PeerInfo) -> Fallible<Self> {
