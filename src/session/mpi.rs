@@ -164,7 +164,7 @@ impl SessionMPI {
             };
             let mv_cmd = Command::Exec {
                 executable: "mv".to_owned(),
-                args: vec!["app/".to_owned() + progname, "tmp/".to_owned()],
+                args: vec![[&app_path, progname].join("/"), "tmp/".to_owned()],
             };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
