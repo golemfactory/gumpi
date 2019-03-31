@@ -187,9 +187,11 @@ impl SessionMPI {
             .send()
             .from_err()
             .and_then(|response| {
+                // FIXME: we should actually return an error and not just print it
+                // This will be changed while fixing issue #25.
                 let status = response.status();
                 if !status.is_success() {
-                    error!("Heck, an error, please FIXME");
+                    error!("Error downloading the output: {}", status);
                 }
                 response.body().limit(1024 * 1024 * 1024).from_err() // 1 GiB limit
             });
