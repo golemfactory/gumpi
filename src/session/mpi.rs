@@ -6,8 +6,11 @@ use crate::{
 };
 use actix_web::{client, HttpMessage};
 use failure::{format_err, Fallible, ResultExt};
-use futures::prelude::*;
-use log::{error, info, warn};
+use futures::{
+    future::{self, Either},
+    prelude::*,
+};
+use log::{info, warn};
 use std::{fs, net::SocketAddr, path::Path, rc::Rc};
 
 pub struct SessionMPI {
@@ -187,13 +190,13 @@ impl SessionMPI {
             .send()
             .from_err()
             .and_then(|response| {
-                // FIXME: we should actually return an error and not just print it
-                // This will be changed while fixing issue #25.
                 let status = response.status();
-                if !status.is_success() {
-                    error!("Error downloading the output: {}", status);
+                if status.is_success() {
+                    Either::A(response.body().limit(1024 * 1024 * 1024).from_err()) // 1 GiB limit
+                } else {
+                    let err = format_err!("Error downloading the outputs: {}", status);
+                    Either::B(future::err(err))
                 }
-                response.body().limit(1024 * 1024 * 1024).from_err() // 1 GiB limit
             });
         let output = wait_ctrlc(future).context("Downloading the file")?;
 
