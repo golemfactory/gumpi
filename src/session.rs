@@ -2,10 +2,13 @@ use actix::prelude::*;
 use actix_web::{client::ClientRequest, http::Method, HttpMessage};
 use bytes::Bytes;
 use failure::{format_err, Fail, Fallible, ResultExt};
-use futures::{future::Either, prelude::*};
+use futures::{
+    future::{self, Either},
+    prelude::*,
+};
 use gu_model::envman::SessionUpdate;
 use log::{debug, info};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::json;
 use std::{convert::Into, fmt, fs, net::SocketAddr, path::Path, rc::Rc, str, time::Duration};
 
@@ -84,8 +87,7 @@ impl ProviderSession {
     pub fn post_service<T, U>(&self, service: u32, json: &T) -> Fallible<U>
     where
         T: Serialize,
-        for<'a> U: Deserialize<'a>,
-        U: Sync + Send + 'static,
+        U: DeserializeOwned,
     {
         self.hub_session
             .post_provider(self.peerinfo.node_id, service, json)
@@ -165,8 +167,7 @@ impl HubSession {
     fn post_provider<T, U>(&self, provider: NodeId, service: u32, json: &T) -> Fallible<U>
     where
         T: Serialize,
-        for<'a> U: Deserialize<'a>,
-        U: Sync + Send + 'static,
+        U: DeserializeOwned,
     {
         let url = format!(
             "http://{}/peers/send-to/{}/{}",
@@ -300,8 +301,7 @@ fn query_deserialize_json_fut<T, U>(
 ) -> impl Future<Item = Option<U>, Error = failure::Error>
 where
     T: Serialize,
-    for<'a> U: Deserialize<'a>,
-    U: Sync + Send + 'static,
+    U: DeserializeOwned,
 {
     use actix_web::http::StatusCode;
 
@@ -316,14 +316,19 @@ where
         .and_then(|resp| {
             let status = resp.status();
             match status {
-                StatusCode::NO_CONTENT => None,
-                _ => Some(
+                StatusCode::NO_CONTENT => Either::A(future::ok(None)),
+                _ if !status.is_success() => Either::A(future::err(format_err!(
+                    "HTTP request was not successful: {}",
+                    status
+                ))),
+                _ => Either::B(
                     resp.body()
                         .limit(1024 * 1024 * 1024) // maximum payload: 1 GiB
                         .from_err()
                         .and_then(|bytes| {
-                            serde_json::from_slice(bytes.as_ref())
+                            serde_json::from_slice::<U>(bytes.as_ref())
                                 .map_err(|err| DeserializationError::new(err, bytes).into())
+                                .map(Some)
                         }),
                 ),
             }
@@ -361,8 +366,7 @@ fn query_deserialize<T, U>(
 ) -> Fallible<Option<U>>
 where
     T: Serialize,
-    for<'a> U: Deserialize<'a>,
-    U: Sync + Send + 'static,
+    U: DeserializeOwned,
 {
     let fut = query_deserialize_json_fut(method, url, payload);
     wait_ctrlc(fut)
