@@ -1,12 +1,13 @@
 use actix::prelude::*;
 use actix_web::{client::ClientRequest, http::Method, HttpMessage};
-use failure::{format_err, Fallible, ResultExt};
+use bytes::Bytes;
+use failure::{format_err, Fail, Fallible, ResultExt};
 use futures::{future::Either, prelude::*};
 use gu_model::envman::SessionUpdate;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{convert::Into, fs, net::SocketAddr, path::Path, rc::Rc, time::Duration};
+use std::{convert::Into, fmt, fs, net::SocketAddr, path::Path, rc::Rc, str, time::Duration};
 
 mod gu_struct;
 pub mod mpi;
@@ -23,8 +24,8 @@ struct ProviderSession {
     hub_session: Rc<HubSession>,
 }
 
-const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image.hdi";
-const GUMPI_IMAGE_SHA1: &str = "a5749cd49c2fdc495c2871e2bd5a54eaf9882d2a";
+const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image-test.hdi";
+const GUMPI_IMAGE_SHA1: &str = "367c891fb2fc603ab36fae67e8cfe1d1e8c28ff8";
 
 impl ProviderSession {
     pub fn new(hub_session: Rc<HubSession>, peerinfo: PeerInfo) -> Fallible<Self> {
@@ -261,6 +262,35 @@ impl Drop for HubSession {
 
 type BlobId = u64;
 
+#[derive(Debug, Fail)]
+#[fail(
+    display = "Deserialization failed: {}. Original string: {}",
+    error, raw_json
+)]
+struct DeserializationError {
+    #[fail(cause)]
+    error: serde_json::Error,
+    raw_json: DisplayBytes,
+}
+
+#[derive(Debug)]
+struct DisplayBytes(Bytes);
+impl std::fmt::Display for DisplayBytes {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        match str::from_utf8(&self.0) {
+            Ok(s) => write!(fmt, "{}", s),
+            Err(e) => write!(fmt, "data was not valid UTF-8: {}", e),
+        }
+    }
+}
+
+impl DeserializationError {
+    fn new(error: serde_json::Error, raw_json: Bytes) -> Self {
+        let raw_json = DisplayBytes(raw_json);
+        Self { error, raw_json }
+    }
+}
+
 // When using this function, the type should be explicitly annotated!
 // This is probably a bug in the Rust compiler
 // see https://github.com/rust-lang/rust/issues/55928
@@ -283,15 +313,22 @@ where
         .json(&payload)
         .into_future()
         .and_then(|req| req.send().from_err())
+        .from_err()
         .and_then(|resp| {
             let status = resp.status();
             match status {
-                // TODO print the raw json in the context
                 StatusCode::NO_CONTENT => None,
-                _ => Some(resp.json().from_err()),
+                _ => Some(
+                    resp.body()
+                        .limit(1024 * 1024 * 1024) // maximum payload: 1 GiB
+                        .from_err()
+                        .and_then(|bytes| {
+                            serde_json::from_slice(bytes.as_ref())
+                                .map_err(|err| DeserializationError::new(err, bytes).into())
+                        }),
+                ),
             }
         })
-        .map_err(Into::into)
 }
 
 fn wait_ctrlc<F>(future: F) -> Fallible<F::Item>
