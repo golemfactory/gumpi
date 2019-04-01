@@ -1,7 +1,7 @@
 version: '2.3'
 services:
         hub:
-                build: 
+                build:
                         context: ..
                         dockerfile: docker/hub/Dockerfile
         prov:
@@ -11,4 +11,3 @@ services:
                 scale: 4
                 volumes:
                         - ./cpuinfo:/proc/cpuinfo:ro
-                          

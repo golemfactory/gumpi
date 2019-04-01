@@ -1,6 +1,6 @@
 FROM rust as build
 ARG GU_BRANCH=${GU_BRANCH:-release/0.2}
-RUN git clone git://github.com/golemfactory/golem-unlimited.git 
+RUN git clone git://github.com/golemfactory/golem-unlimited.git
 RUN cd golem-unlimited && git fetch && git checkout $GU_BRANCH
 RUN cargo install --path golem-unlimited/gu-provider
 
@@ -54,5 +54,3 @@ COPY init.sh /usr/bin/
 WORKDIR /opt/provider
 ENV RUST_LOG=info
 CMD /usr/bin/init.sh
-
-
