@@ -93,6 +93,9 @@ impl SessionMPI {
         let progname = deploy_prefix.map(|p| p + &progname).unwrap_or(progname);
 
         cmdline.extend(vec![
+            "--mca".to_owned(),
+            "btl_tcp_if_exclude".to_owned(),
+            "docker0".to_owned(),
             "-n".to_owned(),
             nproc.to_string(),
             "--hostfile".to_owned(),
