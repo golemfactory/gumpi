@@ -11,6 +11,16 @@ Minimum supported version:
 
 gumpi requires at least OpenMPI 3.0 on the provider machine. Since the current LTS version of Ubuntu only has OpenMPI 2.x, you can find a compatible Docker image [here](https://github.com/marmistrz/docker-openmpi).
 
+# Demo
+
+Install Docker, Docker Compose and jq.
+Then
+
+```
+cd docker
+./run-tests.sh
+```
+
 # Example usage
 
 If the hub listens at `127.0.0.1:61622` and you want to spawn `12` processes, enter `gumpi` project root, execute:
