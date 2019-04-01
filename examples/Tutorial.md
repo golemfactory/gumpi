@@ -48,9 +48,7 @@ We build the Release CMake build flavor.
 
 ## Make
 Unfortunately, this is not the case with generic Makefiles.
-Since the application sources are put into the `app` subdirectory, there are two possible approaches. Either:
-* make sure that your makefile will create the executable in the parent directory
-* if your `progname` is `foo`, just prepend `app/`, in this example `progname` should become `app/foo`
+Make sure that your Makefile puts the resulting binary to the top-level project directory.
 
 While the CMake build backend makes sure that the MPI wrappers (`mpicc`, `mpicxx`)are being used,
 this is not the case for the Make backend. Please make sure that your Makefile uses these wrappers.
