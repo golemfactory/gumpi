@@ -2,4 +2,4 @@
 
 service ssh start
 
-su -c "/usr/bin/gu-provider server run" $USER
+su -c "/usr/bin/gu-provider server run" "$USER"

@@ -7,13 +7,13 @@ check_cmd() {
 		exit 1
 	fi
 }
+check_cmd jq
 
 cleanup() {
 	docker-compose down
 }
 trap cleanup EXIT
 
-check_cmd jq
 
 set -x
 set -e
@@ -30,4 +30,5 @@ sleep 2
 
 docker-compose exec hub gu-hub peer list
 
+# The result of this task should be 242611
 docker-compose exec hub gumpi -h "$HUB_ADDR" -j /examples/game-life.toml -n 4
