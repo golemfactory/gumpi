@@ -10,7 +10,7 @@ pub struct SessionMPI {
 }
 
 impl SessionMPI {
-    pub fn init(hub_ip: SocketAddr) -> Fallible<Self> {
+    pub fn init(hub_ip: SocketAddr, cpus_requested: usize) -> Fallible<Self> {
         let hub_session = HubSession::new(hub_ip)?;
         let hub_session = Rc::new(hub_session);
 
@@ -36,6 +36,18 @@ impl SessionMPI {
             return Err(format_err!("No providers available"));
         }
 
+        let cpus_available: usize = provider_sessions
+            .iter()
+            .map(|peer| peer.hardware.num_cores)
+            .sum();
+        if cpus_available < cpus_requested {
+            return Err(format_err!(
+                "Not enough CPUs available: requested: {}, available: {}",
+                cpus_requested,
+                cpus_available
+            ));
+        }
+
         info!("Initialized GUMPI.");
 
         Ok(Self {
@@ -52,21 +64,14 @@ impl SessionMPI {
         let peers = &self.provider_sessions;
         let file_lines: Vec<_> = peers
             .iter()
-            .filter_map(|peer| {
-                let hw = match peer.get_hardware() {
-                    Ok(hw) => hw,
-                    Err(e) => {
-                        warn!("Error getting hardware for peer {:?}: {}", peer, e);
-                        return None;
-                    }
-                };
-
+            .map(|peer| {
                 let ip_sock = &peer.peerinfo.peer_addr;
                 let ip_sock: SocketAddr = ip_sock
                     .parse()
                     .unwrap_or_else(|_| panic!("GU returned an invalid IP address, {}", ip_sock));
                 let ip = ip_sock.ip();
-                Some(format!("{} port=4222 slots={}", ip, hw.num_cores))
+
+                format!("{} port=4222 slots={}", ip, peer.hardware.num_cores)
             })
             .collect();
         Ok(file_lines.join("\n"))
@@ -74,7 +79,7 @@ impl SessionMPI {
 
     pub fn exec<T: Into<String>>(
         &self,
-        nproc: u32,
+        nproc: usize,
         progname: T,
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,

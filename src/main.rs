@@ -35,7 +35,7 @@ fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
-    let mgr = SessionMPI::init(opt.hub)?;
+    let mgr = SessionMPI::init(opt.hub, opt.numproc)?;
 
     let deploy_prefix;
     if let Some(sources) = config.sources {
