@@ -5,7 +5,7 @@ name = "gumpi"
 version = "0.1.0"
 
 [features]
-# Enabloing this feature will prevent the sessions from being closed on exit.
+# Enabling this feature will prevent the sessions from being closed on exit.
 # As a consequence, ctrl-c will no longer kill the job on the provider node
 # if the feature is enabled.
 # This feature is intended only for debugging purposes.
