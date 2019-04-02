@@ -21,6 +21,7 @@ use gu_net::NodeId;
 struct ProviderSession {
     session_id: String,
     peerinfo: PeerInfo,
+    hardware: Hardware,
     hub_session: Rc<HubSession>,
 }
 
@@ -30,7 +31,7 @@ const GUMPI_IMAGE_SHA1: &str = "367c891fb2fc603ab36fae67e8cfe1d1e8c28ff8";
 impl ProviderSession {
     pub fn new(hub_session: Rc<HubSession>, peerinfo: PeerInfo) -> Fallible<Self> {
         let node_id = peerinfo.node_id;
-        let service = 37;
+        let cs_service = 37;
 
         let payload = CreateSession {
             env_type: "hd".to_owned(),
@@ -45,12 +46,18 @@ impl ProviderSession {
         };
 
         let session_id: String = hub_session
-            .post_provider(node_id, service, &payload)
-            .context("POST request")?;
+            .post_provider(node_id, cs_service, &payload)
+            .context("Creating the provider session")?;
         info!("Session id: {}", session_id);
+
+        let hw_service = 19354;
+        let hardware = hub_session
+            .post_provider(node_id, hw_service, &())
+            .context("Getting hardware info")?;
 
         Ok(Self {
             session_id,
+            hardware,
             peerinfo,
             hub_session,
         })
@@ -72,14 +79,6 @@ impl ProviderSession {
         info!("Reply: {}", reply);
 
         Ok(())
-    }
-
-    fn get_hardware(&self) -> Fallible<Hardware> {
-        let id = self.peerinfo.node_id;
-        let service = 19354;
-
-        let hw = self.hub_session.post_provider(id, service, &())?;
-        Ok(hw)
     }
 
     pub fn post_service<T, U>(&self, service: u32, json: &T) -> Fallible<U>
