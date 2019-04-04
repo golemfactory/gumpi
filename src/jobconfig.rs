@@ -1,4 +1,5 @@
 use failure::{Fallible, ResultExt};
+use gu_net::NodeId;
 use serde_derive::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -51,6 +52,11 @@ pub struct Opt {
     pub hub: SocketAddr,
     #[structopt(short = "j", long = "job")]
     pub jobconfig: PathBuf,
+    #[structopt(
+        long = "providers",
+        help = "explictly select which providers to use, by their node id"
+    )]
+    pub providers: Vec<NodeId>,
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 use super::{Command, HubSession, ProviderSession, ResourceFormat};
 use crate::jobconfig::{BuildType, Sources};
 use failure::{format_err, Fallible, ResultExt};
+use gu_net::NodeId;
 use log::{info, warn};
 use std::{net::SocketAddr, path::Path, rc::Rc};
 
@@ -10,7 +11,11 @@ pub struct SessionMPI {
 }
 
 impl SessionMPI {
-    pub fn init(hub_ip: SocketAddr, cpus_requested: usize) -> Fallible<Self> {
+    pub fn init(
+        hub_ip: SocketAddr,
+        cpus_requested: usize,
+        providers_filter: Option<Vec<NodeId>>,
+    ) -> Fallible<Self> {
         let hub_session = HubSession::new(hub_ip)?;
         let hub_session = Rc::new(hub_session);
 
@@ -18,6 +23,13 @@ impl SessionMPI {
         let provider_sessions: Vec<ProviderSession> = providers
             .into_iter()
             .filter_map(|p| {
+                if let Some(filter) = &providers_filter {
+                    if !filter.contains(&p.node_id) {
+                        info!("Ignoring provider: {}", p.node_id.to_string());
+                        return None;
+                    }
+                }
+                info!("Connecting to provider: {}", p.node_id.to_string());
                 let sess = ProviderSession::new(Rc::clone(&hub_session), p);
                 match sess {
                     Err(e) => {
