@@ -187,7 +187,7 @@ impl HubSession {
         // TODO HACK investigate what should the error type be and get a decent error message
         let reply: Result<U, serde_json::Value> =
             query_deserialize(Method::POST, &url, payload)?.expect("No content");
-        reply.map_err(|err| format_err!("Provider replied: {}", err))
+        reply.map_err(|err| format_err!("Provider {} replied: {}", provider.to_string(), err))
     }
 
     /// Returns: blob id
