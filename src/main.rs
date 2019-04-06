@@ -36,16 +36,29 @@ fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
-    let mgr = SessionMPI::init(opt.hub)?;
+    let mgr = SessionMPI::init(opt.hub, opt.numproc)?;
 
+    let deploy_prefix;
     if let Some(sources) = config.sources {
         // It's safe to call unwrap here - at this point opt.jobconfig
         // is guaranteed to be a valid filepath, which is checked by
         // JobConfig::from_file
-        mgr.deploy(opt.jobconfig.parent().unwrap(), &sources)
+        let prefix = mgr
+            .deploy(opt.jobconfig.parent().unwrap(), &sources, &config.progname)
             .context("deploying the sources")?;
+        deploy_prefix = Some(prefix);
+    } else {
+        deploy_prefix = None;
     }
-    mgr.exec(opt.numproc, config.progname, config.args, config.mpiargs)?;
+
+    mgr.exec(
+        opt.numproc,
+        config.progname,
+        config.args,
+        config.mpiargs,
+        deploy_prefix,
+    )?;
+
     if let Some(output) = config.output {
         mgr.retrieve_output(&output)?;
     }
