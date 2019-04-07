@@ -29,3 +29,7 @@ git = "https://github.com/golemfactory/golem-unlimited"
 [dependencies.gu-net]
 branch = "gumpi-freeze"
 git = "https://github.com/golemfactory/golem-unlimited"
+
+[dependencies.gu-client]
+branch = "gumpi-freeze"
+git = "https://github.com/golemfactory/golem-unlimited"

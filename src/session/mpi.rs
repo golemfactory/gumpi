@@ -1,19 +1,40 @@
-use super::{Command, HubSession, ProviderSession, ResourceFormat};
+//use super::{Command, ProviderSession, ResourceFormat};
 use crate::jobconfig::{BuildType, Sources};
 use failure::{format_err, Fallible, ResultExt};
+use futures::{
+    future::{self, Either},
+    prelude::*,
+};
+use gu_client::r#async::{HubConnection, HubSessionRef};
+use gu_model::session::HubSessionSpec;
 use log::{info, warn};
 use std::{net::SocketAddr, path::Path, rc::Rc};
 
 pub struct SessionMPI {
-    provider_sessions: Vec<ProviderSession>,
-    hub_session: Rc<HubSession>,
+    //provider_sessions: Vec<ProviderSession>,
+    pub hub_session: HubSessionRef, // TODO private
 }
 
 impl SessionMPI {
-    pub fn init(hub_ip: SocketAddr, cpus_requested: usize) -> Fallible<Self> {
-        let hub_session = HubSession::new(hub_ip)?;
-        let hub_session = Rc::new(hub_session);
+    pub fn init(
+        hub_ip: SocketAddr,
+        cpus_requested: usize,
+    ) -> impl Future<Item = SessionMPI, Error = failure::Error> {
+        let hub_conn = HubConnection::from_addr(hub_ip.to_string()).context("invalid hub address");
+        let hub_conn = match hub_conn {
+            Err(e) => return Either::A(future::err(e.into())),
+            Ok(conn) => conn,
+        };
 
+        Either::B(
+            hub_conn
+                .new_session(HubSessionSpec::default())
+                .from_err()
+                .and_then(|hub_session| Ok(Self { hub_session })),
+        )
+    }
+}
+/*
         let providers = hub_session.get_providers()?;
         let provider_sessions: Vec<ProviderSession> = providers
             .into_iter()
@@ -55,7 +76,8 @@ impl SessionMPI {
             provider_sessions,
         })
     }
-
+*/
+/*
     fn root_provider(&self) -> &ProviderSession {
         &self.provider_sessions[0]
     }
@@ -191,3 +213,4 @@ impl SessionMPI {
         Ok("/tmp/".to_owned())
     }
 }
+*/
