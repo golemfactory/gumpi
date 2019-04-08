@@ -23,13 +23,13 @@ toml = "0.4.8"
 git = "https://github.com/marmistrz/actix-web"
 
 [dependencies.gu-model]
-branch = "release/0.2"
+branch = "feature/gu-client-rpc"
 git = "https://github.com/golemfactory/golem-unlimited"
 
 [dependencies.gu-net]
-branch = "release/0.2"
+branch = "feature/gu-client-rpc"
 git = "https://github.com/golemfactory/golem-unlimited"
 
 [dependencies.gu-client]
-branch = "release/0.2"
+branch = "feature/gu-client-rpc"
 git = "https://github.com/golemfactory/golem-unlimited"

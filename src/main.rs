@@ -11,7 +11,6 @@ use crate::{
 use actix::prelude::*;
 use failure::{Fallible, ResultExt};
 use futures::{future, prelude::*};
-use gu_client::r#async::HubConnection;
 use std::env;
 use structopt::StructOpt;
 
