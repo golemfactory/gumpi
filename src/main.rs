@@ -41,8 +41,13 @@ fn run() -> Fallible<()> {
     System::run(move || {
         Arbiter::spawn(
             SessionMPI::init(opt.hub, opt.numproc)
+                .map_err(|e| {
+                    println!("Error initializing session: {}", e);
+                    e
+                })
                 .and_then(|session| session.hub_session.list_peers().from_err())
                 .and_then(|peers| {
+                    println!("listing session peers");
                     peers.for_each(|peer| println!("peer_id={:#?}", peer.node_id));
                     future::ok(())
                 })

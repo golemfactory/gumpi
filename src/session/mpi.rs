@@ -5,14 +5,14 @@ use futures::{
     future::{self, Either},
     prelude::*,
 };
-use gu_client::r#async::{HubConnection, HubSessionRef};
+use gu_client::r#async::{HubConnection, HubSession, HubSessionRef};
 use gu_model::session::HubSessionSpec;
 use log::{info, warn};
 use std::{net::SocketAddr, path::Path, rc::Rc};
 
 pub struct SessionMPI {
     //provider_sessions: Vec<ProviderSession>,
-    pub hub_session: HubSessionRef, // TODO private
+    pub hub_session: HubSession, // TODO private
 }
 
 impl SessionMPI {
@@ -20,17 +20,28 @@ impl SessionMPI {
         hub_ip: SocketAddr,
         cpus_requested: usize,
     ) -> impl Future<Item = SessionMPI, Error = failure::Error> {
+        println!("initializing");
         let hub_conn = HubConnection::from_addr(hub_ip.to_string()).context("invalid hub address");
         let hub_conn = match hub_conn {
             Err(e) => return Either::A(future::err(e.into())),
             Ok(conn) => conn,
         };
 
+        let hub_session = hub_conn.new_session(HubSessionSpec::default());
+        let peers = hub_conn.list_peers();
+
         Either::B(
-            hub_conn
-                .new_session(HubSessionSpec::default())
-                .from_err()
-                .and_then(|hub_session| Ok(Self { hub_session })),
+            hub_session
+                .join(peers)
+                .and_then(|(session, peers)| {
+                    let hub_session = session.into_inner().unwrap();
+                    let peers: Vec<_> = peers.map(|p| p.node_id).collect();
+                    println!("peers: {:?}", peers);
+                    hub_session
+                        .add_peers(peers)
+                        .and_then(|_| Ok(Self { hub_session }))
+                })
+                .from_err(),
         )
     }
 }
