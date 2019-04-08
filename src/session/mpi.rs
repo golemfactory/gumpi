@@ -11,6 +11,15 @@ pub struct SessionMPI {
 
 impl SessionMPI {
     pub fn init(hub_ip: SocketAddr, cpus_requested: usize) -> Fallible<Self> {
+        if hub_ip.ip().is_loopback() {
+            warn!(
+                "The hub address {} is a loopback address. \
+                 This is discouraged and you may experience connectivity problems. \
+                 See issue #37.",
+                hub_ip
+            );
+        }
+
         let hub_session = HubSession::new(hub_ip)?;
         let hub_session = Rc::new(hub_session);
 
