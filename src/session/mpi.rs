@@ -158,7 +158,7 @@ impl SessionMPI {
         Ok(file_lines.join("\n"))
     }
 
-    pub fn exec<T: Into<String>>(
+    /*pub fn exec<T: Into<String>>(
         &self,
         nproc: usize,
         progname: T,
@@ -206,7 +206,7 @@ impl SessionMPI {
             println!("{}\n========================", out);
         }
         Ok(())
-    }
+    }*/
 
     /*
         // Returns: the deployment prefix
