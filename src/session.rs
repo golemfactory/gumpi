@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{convert::Into, fmt, fs, net::SocketAddr, path::Path, rc::Rc, str, time::Duration};
 */
+pub mod gu_client_ext;
 pub mod gu_struct;
 pub mod mpi;
 /*

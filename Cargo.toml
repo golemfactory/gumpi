@@ -33,3 +33,7 @@ git = "https://github.com/golemfactory/golem-unlimited"
 [dependencies.gu-client]
 branch = "feature/gu-client-rpc"
 git = "https://github.com/golemfactory/golem-unlimited"
+
+[dependencies.gu-hardware]
+branch = "feature/gu-client-rpc"
+git = "https://github.com/golemfactory/golem-unlimited"
