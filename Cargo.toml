@@ -23,17 +23,17 @@ toml = "0.5.0"
 git = "https://github.com/marmistrz/actix-web"
 
 [dependencies.gu-model]
-branch = "feature/gu-client-rpc"
-git = "https://github.com/golemfactory/golem-unlimited"
+branch = "gu-client-rpc-from"
+git = "https://github.com/marmistrz/golem-unlimited"
 
 [dependencies.gu-net]
-branch = "feature/gu-client-rpc"
-git = "https://github.com/golemfactory/golem-unlimited"
+branch = "gu-client-rpc-from"
+git = "https://github.com/marmistrz/golem-unlimited"
 
 [dependencies.gu-client]
-branch = "feature/gu-client-rpc"
-git = "https://github.com/golemfactory/golem-unlimited"
+branch = "gu-client-rpc-from"
+git = "https://github.com/marmistrz/golem-unlimited"
 
 [dependencies.gu-hardware]
-branch = "feature/gu-client-rpc"
-git = "https://github.com/golemfactory/golem-unlimited"
+branch = "gu-client-rpc-from"
+git = "https://github.com/marmistrz/golem-unlimited"

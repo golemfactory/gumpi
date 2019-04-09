@@ -814,7 +814,7 @@ dependencies = [
 [[package]]
 name = "gu-actix"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc#47aad639cd3678334e1150443232f0394298c2e4"
+source = "git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from#8bf01bc42fd27c7208e9b9373ac70f1940ed2695"
 dependencies = [
  "actix 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -827,7 +827,7 @@ dependencies = [
 [[package]]
 name = "gu-base"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc#47aad639cd3678334e1150443232f0394298c2e4"
+source = "git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from#8bf01bc42fd27c7208e9b9373ac70f1940ed2695"
 dependencies = [
  "actix 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 0.7.19 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -852,16 +852,16 @@ dependencies = [
 [[package]]
 name = "gu-client"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc#47aad639cd3678334e1150443232f0394298c2e4"
+source = "git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from#8bf01bc42fd27c7208e9b9373ac70f1940ed2695"
 dependencies = [
  "actix 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 0.7.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "gu-actix 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
- "gu-model 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
- "gu-net 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
+ "gu-actix 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
+ "gu-model 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
+ "gu-net 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -872,17 +872,17 @@ dependencies = [
 [[package]]
 name = "gu-hardware"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc#47aad639cd3678334e1150443232f0394298c2e4"
+source = "git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from#8bf01bc42fd27c7208e9b9373ac70f1940ed2695"
 dependencies = [
  "actix 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 0.7.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "gu-actix 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
- "gu-base 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
- "gu-net 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
- "gu-persist 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
+ "gu-actix 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
+ "gu-base 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
+ "gu-net 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
+ "gu-persist 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
  "hostname 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -895,14 +895,14 @@ dependencies = [
 [[package]]
 name = "gu-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc#47aad639cd3678334e1150443232f0394298c2e4"
+source = "git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from#8bf01bc42fd27c7208e9b9373ac70f1940ed2695"
 dependencies = [
  "actix 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 0.7.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "digest 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "gu-net 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
+ "gu-net 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
  "semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -914,7 +914,7 @@ dependencies = [
 [[package]]
 name = "gu-net"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc#47aad639cd3678334e1150443232f0394298c2e4"
+source = "git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from#8bf01bc42fd27c7208e9b9373ac70f1940ed2695"
 dependencies = [
  "actix 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 0.7.19 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -923,7 +923,7 @@ dependencies = [
  "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "gu-actix 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
+ "gu-actix 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "quick-protobuf 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -939,7 +939,7 @@ dependencies = [
 [[package]]
 name = "gu-persist"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc#47aad639cd3678334e1150443232f0394298c2e4"
+source = "git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from#8bf01bc42fd27c7208e9b9373ac70f1940ed2695"
 dependencies = [
  "actix 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 0.7.19 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -948,8 +948,8 @@ dependencies = [
  "directories 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "gu-actix 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
- "gu-base 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
+ "gu-actix 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
+ "gu-base 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -969,10 +969,10 @@ dependencies = [
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "gu-client 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
- "gu-hardware 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
- "gu-model 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
- "gu-net 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)",
+ "gu-client 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
+ "gu-hardware 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
+ "gu-model 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
+ "gu-net 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2523,13 +2523,13 @@ dependencies = [
 "checksum futures-cpupool 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)" = "ab90cde24b3319636588d0c35fe03b1333857621051837ed769faefb4c2162e4"
 "checksum generic-array 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3c0f28c2f5bfb5960175af447a2da7c18900693738343dc896ffbcabd9839592"
 "checksum generic-array 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ef25c5683767570c2bbd7deba372926a55eaae9982d7726ee2a1050239d45b9d"
-"checksum gu-actix 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)" = "<none>"
-"checksum gu-base 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)" = "<none>"
-"checksum gu-client 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)" = "<none>"
-"checksum gu-hardware 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)" = "<none>"
-"checksum gu-model 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)" = "<none>"
-"checksum gu-net 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)" = "<none>"
-"checksum gu-persist 0.1.0 (git+https://github.com/golemfactory/golem-unlimited?branch=feature/gu-client-rpc)" = "<none>"
+"checksum gu-actix 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)" = "<none>"
+"checksum gu-base 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)" = "<none>"
+"checksum gu-client 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)" = "<none>"
+"checksum gu-hardware 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)" = "<none>"
+"checksum gu-model 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)" = "<none>"
+"checksum gu-net 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)" = "<none>"
+"checksum gu-persist 0.1.0 (git+https://github.com/marmistrz/golem-unlimited?branch=gu-client-rpc-from)" = "<none>"
 "checksum h2 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)" = "910a5e7be6283a9c91b3982fa5188368c8719cce2a3cf3b86048673bf9d9c36b"
 "checksum heck 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "20564e78d53d2bb135c343b3f47714a56af2061f1c928fdb541dc7b9fdd94205"
 "checksum hostname 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "21ceb46a83a85e824ef93669c8b390009623863b5c195d1ba747292c0c72f94e"

@@ -1,14 +1,16 @@
 //use super::{Command, ProviderSession, ResourceFormat};
 use crate::{
+    failure_ext::FutureExt,
     jobconfig::{BuildType, Sources},
-    session::gu_struct::*,
+    session::gu_client_ext::PeerHardwareQuery,
 };
-use failure::{Fallible, ResultExt};
+use failure::{Fail, Fallible, ResultExt};
 use futures::{
     future::{self, Either},
     prelude::*,
 };
 use gu_client::r#async::{HubConnection, HubSession, HubSessionRef, Peer, PeerSession};
+use gu_hardware::actor::Hardware;
 use gu_model::{
     envman::{Command, CreateSession, DestroySession, Image, ResourceFormat},
     peers::PeerInfo,
@@ -18,14 +20,15 @@ use gu_model::{
 use log::{info, warn};
 use std::net::SocketAddr;
 
-struct ProviderMPI {
+#[derive(Debug)]
+pub struct ProviderMPI {
     session: PeerSession,
-    // hardware: Hardware,
+    hardware: Hardware,
     info: PeerInfo,
 }
 
 pub struct SessionMPI {
-    providers: Vec<ProviderMPI>,
+    pub providers: Vec<ProviderMPI>,
     pub hub_session: HubSession, // TODO private
 }
 
@@ -59,38 +62,44 @@ impl SessionMPI {
             options: (),
         };
 
-        Either::B(
-            hub_session
-                .join(peers)
-                .and_then(move |(session, peers)| {
-                    // TODO manual cleanup
-                    let hub_session = session.into_inner().unwrap();
-                    let peers_session = hub_session.clone();
+        Either::B(hub_session.join(peers).context("adding peers").and_then(
+            move |(session, peers)| {
+                // TODO manual cleanup
+                let hub_session = session.into_inner().unwrap();
+                let peers_session = hub_session.clone();
 
-                    let peers: Vec<_> = peers.map(|p| p.node_id).collect();
-                    info!("peers available: {:?}", peers);
+                let peers: Vec<_> = peers.map(|p| p.node_id).collect();
+                info!("peers available: {:?}", peers);
 
-                    hub_session
-                        .add_peers(peers)
-                        .and_then(move |nodes| {
-                            let peer_sessions = nodes.into_iter().map(move |node_id| {
-                                let peer = peers_session.peer(node_id);
-                                let info = peer.info();
-                                let sess = peer.new_session(peer_session_spec.clone());
-                                sess.join(info)
-                                    .and_then(|(session, info)| Ok(ProviderMPI { session, info }))
-                            });
-                            future::join_all(peer_sessions)
+                hub_session
+                    .add_peers(peers)
+                    .from_err()
+                    .and_then(move |nodes| {
+                        let peer_sessions = nodes.into_iter().map(move |node_id| {
+                            let peer = peers_session.peer(node_id);
+                            let info = peer.info().from_err();
+                            let hardware = peer.hardware();
+                            let sess = peer.new_session(peer_session_spec.clone()).from_err();
+                            Future::join3(sess, hardware, info).and_then(
+                                |(session, hardware, info)| {
+                                    Ok(ProviderMPI {
+                                        session,
+                                        hardware,
+                                        info,
+                                    })
+                                },
+                            )
+                        });
+                        future::join_all(peer_sessions)
+                    })
+                    .and_then(|providers| {
+                        Ok(Self {
+                            hub_session,
+                            providers,
                         })
-                        .and_then(|providers| {
-                            Ok(Self {
-                                hub_session,
-                                providers,
-                            })
-                        })
-                })
-                .from_err(),
-        )
+                    })
+            },
+        ))
     }
 
     /*

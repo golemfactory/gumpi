@@ -1,5 +1,5 @@
 #![warn(clippy::all)]
-
+#![warn(rust_2018_idioms)]
 mod failure_ext;
 mod jobconfig;
 mod session;
@@ -44,7 +44,10 @@ fn run() -> Fallible<()> {
                     println!("Error initializing session: {}", e);
                     e
                 })
-                .and_then(|session| session.hub_session.list_peers().from_err())
+                .and_then(|session| {
+                    println!("providers: {:#?}", session.providers);
+                    session.hub_session.list_peers().from_err()
+                })
                 .and_then(|peers| {
                     println!("listing session peers");
                     peers.for_each(|peer| println!("peer_id={:#?}", peer.node_id));
