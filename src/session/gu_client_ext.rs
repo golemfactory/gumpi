@@ -1,5 +1,5 @@
 use failure::err_msg;
-use futures::{future, prelude::*};
+use futures::prelude::*;
 use gu_client::r#async::{Peer, ProviderRef};
 use gu_hardware::actor::{Hardware, HardwareQuery};
 
