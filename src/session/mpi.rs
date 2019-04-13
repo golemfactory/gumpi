@@ -7,6 +7,7 @@ use crate::{
 use failure::{Fail, Fallible, ResultExt};
 use futures::{
     future::{self, Either},
+    stream,
     prelude::*,
 };
 use gu_client::r#async::{HubConnection, HubSession, HubSessionRef, Peer, PeerSession};
@@ -36,10 +37,7 @@ const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image-test.hdi";
 const GUMPI_IMAGE_SHA1: &str = "367c891fb2fc603ab36fae67e8cfe1d1e8c28ff8";
 
 impl SessionMPI {
-    pub fn init(
-        hub_ip: SocketAddr,
-        cpus_requested: usize,
-    ) -> impl Future<Item = SessionMPI, Error = failure::Error> {
+    pub fn init(hub_ip: SocketAddr) -> impl Future<Item = SessionMPI, Error = failure::Error> {
         println!("initializing");
         let hub_conn = HubConnection::from_addr(hub_ip.to_string()).context("invalid hub address");
         let hub_conn = match hub_conn {
@@ -68,28 +66,29 @@ impl SessionMPI {
                 let hub_session = session.into_inner().unwrap();
                 let peers_session = hub_session.clone();
 
-                let peers: Vec<_> = peers.map(|p| p.node_id).collect();
+                let peers: Vec<_> = peers.collect();
                 info!("peers available: {:?}", peers);
+                let nodes: Vec<_> = peers.iter().map(|p| &p.node_id).cloned().collect();
 
                 hub_session
-                    .add_peers(peers)
+                    .add_peers(nodes)
                     .from_err()
                     .and_then(move |nodes| {
-                        let peer_sessions = nodes.into_iter().map(move |node_id| {
-                            let peer = peers_session.peer(node_id);
-                            let info = peer.info().from_err();
-                            let hardware = peer.hardware();
-                            let sess = peer.new_session(peer_session_spec.clone()).from_err();
-                            Future::join3(sess, hardware, info).and_then(
-                                |(session, hardware, info)| {
+                        let peer_sessions =
+                            nodes.into_iter().zip(peers).map(move |(node_id, info)| {
+                                let peer = peers_session.peer(node_id);
+                                let hardware = peer.hardware().context("getting hardware info");
+                                let sess = peer
+                                    .new_session(peer_session_spec.clone())
+                                    .context("creating peer session");
+                                Future::join(sess, hardware).and_then(|(session, hardware)| {
                                     Ok(ProviderMPI {
                                         session,
                                         hardware,
                                         info,
                                     })
-                                },
-                            )
-                        });
+                                })
+                            });
                         future::join_all(peer_sessions)
                     })
                     .and_then(|providers| {
@@ -150,7 +149,7 @@ impl SessionMPI {
         self.providers.first().expect("no providers")
     }
 
-    pub fn hostfile(&self) -> Fallible<String> {
+    pub fn hostfile(&self) -> String {
         let peers = &self.providers;
         let file_lines: Vec<_> = peers
             .iter()
@@ -164,17 +163,21 @@ impl SessionMPI {
                 format!("{} port=4222 slots={}", ip, 1) // TODO use peer.hardware.num_cores
             })
             .collect();
-        Ok(file_lines.join("\n"))
+        file_lines.join("\n")
     }
 
-    /*pub fn exec<T: Into<String>>(
+    pub fn total_cpus(&self) -> usize {
+        self.providers.iter().map(|p| p.hardware.num_cores()).sum()
+    }
+
+    pub fn exec<T: Into<String>>(
         &self,
         nproc: usize,
         progname: T,
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,
         deploy_prefix: Option<String>,
-    ) -> Fallible<()> {
+    ) -> impl Future<Item = (), Error = failure::Error> {
         let root = self.root_provider();
         let mut cmdline = vec![];
 
@@ -196,10 +199,17 @@ impl SessionMPI {
         ]);
         cmdline.extend(args.into_iter().map(T::into));
 
-        let hostfile = self.hostfile()?;
+        let hostfile = self.hostfile();
         info!("HOSTFILE:\n{}", hostfile);
-        let blob_id = self.hub_session.upload(hostfile)?;
-        info!("Downloading the hostfile...");
+        // let hostfile_stream = stream::once::<_, actix_web::Error>(Ok(hostfile.into())) ;
+
+        /*self.hub_session
+            .new_blob()
+            .and_then(|blob| blob.upload_from_stream(hostfile_stream).from_err())
+            .from_err()*/
+
+        future::ok(())
+        /*info!("Downloading the hostfile...");
         let download_output = root.download(blob_id, "hostfile".to_owned(), ResourceFormat::Raw);
         info!("Downloaded: {:?}", download_output);
 
@@ -214,8 +224,8 @@ impl SessionMPI {
         for out in ret {
             println!("{}\n========================", out);
         }
-        Ok(())
-    }*/
+        Ok(())*/
+    }
 
     /*
         // Returns: the deployment prefix

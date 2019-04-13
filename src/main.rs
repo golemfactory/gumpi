@@ -10,20 +10,24 @@ use crate::{
 };
 use actix::prelude::*;
 use failure::{Fallible, ResultExt};
+use failure_ext::FutureExt;
 use futures::{future, prelude::*};
+use log::info;
 use std::env;
 use structopt::StructOpt;
 
+fn show_error(e: &failure::Error) {
+    eprint!("error");
+    for cause in e.iter_chain() {
+        eprint!(": {}", cause);
+    }
+    eprintln!("");
+    //std::process::exit(1);
+}
+
 fn main() {
     init_logger();
-    if let Err(e) = run() {
-        eprint!("error");
-        for cause in e.iter_chain() {
-            eprint!(": {}", cause);
-        }
-        eprintln!("");
-        std::process::exit(1);
-    }
+    let _ = run();
 }
 
 fn init_logger() {
@@ -39,13 +43,11 @@ fn run() -> Fallible<()> {
 
     System::run(move || {
         Arbiter::spawn(
-            SessionMPI::init(opt.hub, opt.numproc)
-                .map_err(|e| {
-                    println!("Error initializing session: {}", e);
-                    e
-                })
+            SessionMPI::init(opt.hub)
+                .context("initializing session")
                 .and_then(|session| {
-                    println!("providers: {:#?}", session.providers);
+                    info!("available cores: {}", session.total_cpus());
+                    info!("providers: {:#?}", session.providers);
                     session.hub_session.list_peers().from_err()
                 })
                 .and_then(|peers| {
@@ -53,12 +55,10 @@ fn run() -> Fallible<()> {
                     peers.for_each(|peer| println!("peer_id={:#?}", peer.node_id));
                     future::ok(())
                 })
-                .map_err(|e| {
-                    println!("Error while listing peers: {:#?}.", e);
-                })
-                .then(|_| {
+                .map_err(|e| show_error(&e))
+                .then(|fut| {
                     actix::System::current().stop();
-                    Ok(())
+                    fut
                 }),
         );
     });
