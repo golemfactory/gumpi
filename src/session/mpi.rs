@@ -4,7 +4,7 @@ use crate::{
     jobconfig::{BuildType, Sources},
     session::gu_client_ext::PeerHardwareQuery,
 };
-use failure::{Fallible, ResultExt};
+use failure::ResultExt;
 use futures::{
     future::{self, Either},
     prelude::*,
@@ -90,6 +90,7 @@ impl SessionMPI {
                         future::join_all(peer_sessions)
                     })
                     .and_then(|providers| {
+                        info!("Initialized gumpi");
                         Ok(Self {
                             hub_session,
                             providers,
@@ -98,50 +99,6 @@ impl SessionMPI {
             },
         ))
     }
-
-    /*
-            let providers = hub_session.get_providers()?;
-            let provider_sessions: Vec<ProviderSession> = providers
-                .into_iter()
-                .filter_map(|p| {
-                    let sess = ProviderSession::new(Rc::clone(&hub_session), p);
-                    match sess {
-                        Err(e) => {
-                            warn!("Error initalizing provider session: {}", e);
-                            None
-                        }
-                        Ok(r) => {
-                            info!("Connected to provider: {:#?}", r);
-                            Some(r)
-                        }
-                    }
-                })
-                .collect();
-
-            if provider_sessions.is_empty() {
-                return Err(format_err!("No providers available"));
-            }
-
-            let cpus_available: usize = provider_sessions
-                .iter()
-                .map(|peer| peer.hardware.num_cores)
-                .sum();
-            if cpus_available < cpus_requested {
-                return Err(format_err!(
-                    "Not enough CPUs available: requested: {}, available: {}",
-                    cpus_requested,
-                    cpus_available
-                ));
-            }
-
-            info!("Initialized GUMPI.");
-
-            Ok(Self {
-                hub_session,
-                provider_sessions,
-            })
-        }
-    */
 
     fn root_provider(&self) -> &ProviderMPI {
         self.providers.first().expect("no providers")
@@ -230,7 +187,7 @@ impl SessionMPI {
         config_path: &Path,
         sources: &Sources,
         progname: &str,
-    ) -> impl Future<Item = Vec<Vec<String>>, Error = failure::Error> {
+    ) -> impl Future<Item = DeploymentInfo, Error = failure::Error> {
         let app_path = "app".to_owned();
         let tarball_path = config_path.join(&sources.path);
 
@@ -285,7 +242,14 @@ impl SessionMPI {
         });
         let build = future::join_all(build_futs);
         unimplemented!("FIXME return build instead of a dummy thing");
-        future::ok(vec![vec![]])
-        //Ok("/tmp/".to_owned())
+        future::ok(DeploymentInfo {
+            logs: vec![vec![]],
+            deploy_prefix: "/tmp".to_owned(),
+        })
     }
+}
+
+pub struct DeploymentInfo {
+    pub logs: Vec<Vec<String>>, // TODO match with providers
+    pub deploy_prefix: String,
 }

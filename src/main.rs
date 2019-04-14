@@ -6,12 +6,15 @@ mod session;
 
 use crate::{
     jobconfig::{JobConfig, Opt},
-    session::mpi::SessionMPI,
+    session::mpi::{DeploymentInfo, SessionMPI},
 };
 use actix::prelude::*;
 use failure::{format_err, Fallible, ResultExt};
 use failure_ext::FutureExt;
-use futures::prelude::*;
+use futures::{
+    future::{self, Either},
+    prelude::*,
+};
 use log::info;
 use std::env;
 use structopt::StructOpt;
@@ -44,8 +47,6 @@ fn run() -> Fallible<()> {
 
     let cpus_requested = opt.numproc;
 
-    let deploy_prefix = None; // FIXME
-
     System::run(move || {
         Arbiter::spawn(
             SessionMPI::init(opt.hub)
@@ -63,12 +64,38 @@ fn run() -> Fallible<()> {
                     Ok(session)
                 })
                 .and_then(move |session| {
-                    session.exec(
-                        cpus_requested,
-                        config.progname,
-                        config.args,
-                        config.mpiargs,
-                        deploy_prefix,
+                    let deploy_prefix = if let Some(sources) = &config.sources {
+                        // It's safe to call unwrap here - at this point opt.jobconfig
+                        // is guaranteed to be a valid filepath, which is checked by
+                        // JobConfig::from_file
+                        Either::A(
+                            session
+                                .deploy(opt.jobconfig.parent().unwrap(), &sources, &config.progname)
+                                .context("deploying the sources")
+                                .and_then(|depl| {
+                                    let DeploymentInfo {
+                                        logs,
+                                        deploy_prefix,
+                                    } = depl;
+                                    // TODO better display of compilation logs
+                                    info!("build logs:\n{:#?}", logs);
+                                    Ok(Some(deploy_prefix))
+                                }),
+                        )
+                    } else {
+                        Either::B(future::ok(None))
+                    };
+
+                    future::ok(session).join(deploy_prefix).and_then(
+                        move |(session, deploy_prefix)| {
+                            session.exec(
+                                cpus_requested,
+                                config.progname,
+                                config.args,
+                                config.mpiargs,
+                                deploy_prefix,
+                            )
+                        },
                     )
                 })
                 .and_then(|output| {
@@ -85,33 +112,3 @@ fn run() -> Fallible<()> {
 
     Ok(())
 }
-
-/*fn run() -> Fallible<()> {
-    let opt = Opt::from_args();
-    let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
-
-    let mgr = SessionMPI::init(opt.hub, opt.numproc)?;
-
-    let deploy_prefix;
-    if let Some(sources) = config.sources {
-        // It's safe to call unwrap here - at this point opt.jobconfig
-        // is guaranteed to be a valid filepath, which is checked by
-        // JobConfig::from_file
-        let prefix = mgr
-            .deploy(opt.jobconfig.parent().unwrap(), &sources, &config.progname)
-            .context("deploying the sources")?;
-        deploy_prefix = Some(prefix);
-    } else {
-        deploy_prefix = None;
-    }
-
-    mgr.exec(
-        opt.numproc,
-        config.progname,
-        config.args,
-        config.mpiargs,
-        deploy_prefix,
-    )?;
-
-    Ok(())
-}*/
