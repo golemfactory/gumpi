@@ -201,6 +201,8 @@ impl SessionMPI {
         info!("HOSTFILE:\n{}", hostfile);
         // let hostfile_stream = stream::once::<_, actix_web::Error>(Ok(hostfile.into())) ;
 
+        unimplemented!("hostfile uploading");
+
         /*self.hub_session
         .new_blob()
         .and_then(|blob| blob.upload_from_stream(hostfile_stream).from_err())
@@ -282,7 +284,7 @@ impl SessionMPI {
                 .context(format!("compiling the app on node {:?}", provider))
         });
         let build = future::join_all(build_futs);
-        // FIXME return build instead of a dummy thing
+        unimplemented!("FIXME return build instead of a dummy thing");
         future::ok(vec![vec![]])
         //Ok("/tmp/".to_owned())
     }
