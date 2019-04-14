@@ -7,8 +7,8 @@ use crate::{
 use failure::{Fail, Fallible, ResultExt};
 use futures::{
     future::{self, Either},
-    stream,
     prelude::*,
+    stream,
 };
 use gu_client::r#async::{HubConnection, HubSession, HubSessionRef, Peer, PeerSession};
 use gu_hardware::actor::Hardware;
@@ -177,7 +177,7 @@ impl SessionMPI {
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,
         deploy_prefix: Option<String>,
-    ) -> impl Future<Item = (), Error = failure::Error> {
+    ) -> impl Future<Item = String, Error = failure::Error> {
         let root = self.root_provider();
         let mut cmdline = vec![];
 
@@ -204,22 +204,25 @@ impl SessionMPI {
         // let hostfile_stream = stream::once::<_, actix_web::Error>(Ok(hostfile.into())) ;
 
         /*self.hub_session
-            .new_blob()
-            .and_then(|blob| blob.upload_from_stream(hostfile_stream).from_err())
-            .from_err()*/
+        .new_blob()
+        .and_then(|blob| blob.upload_from_stream(hostfile_stream).from_err())
+        .from_err()*/
 
-        future::ok(())
         /*info!("Downloading the hostfile...");
         let download_output = root.download(blob_id, "hostfile".to_owned(), ResourceFormat::Raw);
         info!("Downloaded: {:?}", download_output);
 
-        info!("Executing mpirun with args {:?}...", cmdline);
+        info!("Executing mpirun with args {:?}...", cmdline);*/
         let exec_cmd = Command::Exec {
             executable: "mpirun".to_owned(),
             args: cmdline,
         };
+        root.session
+            .update(vec![exec_cmd])
+            .and_then(|mut outs| Ok(outs.swap_remove(0)))
+            .from_err()
 
-        let ret = root.exec_commands(vec![exec_cmd])?;
+        /*let ret = root.exec_commands(vec![exec_cmd])?;
         println!("Output:");
         for out in ret {
             println!("{}\n========================", out);

@@ -9,9 +9,9 @@ use crate::{
     session::mpi::SessionMPI,
 };
 use actix::prelude::*;
-use failure::{Fallible, ResultExt};
+use failure::{format_err, Fallible, ResultExt};
 use failure_ext::FutureExt;
-use futures::{future, prelude::*};
+use futures::prelude::*;
 use log::info;
 use std::env;
 use structopt::StructOpt;
@@ -37,23 +37,43 @@ fn init_logger() {
     env_logger::init()
 }
 
+// TODO proper exit code
 fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
+
+    let cpus_requested = opt.numproc;
+
+    let deploy_prefix = None; // FIXME
 
     System::run(move || {
         Arbiter::spawn(
             SessionMPI::init(opt.hub)
                 .context("initializing session")
-                .and_then(|session| {
+                .and_then(move |session| {
                     info!("available cores: {}", session.total_cpus());
-                    info!("providers: {:#?}", session.providers);
-                    session.hub_session.list_peers().from_err()
+                    let cpus_available = session.total_cpus();
+                    if cpus_available < cpus_requested {
+                        return Err(format_err!(
+                            "Not enough CPUs available: requested: {}, available: {}",
+                            cpus_requested,
+                            cpus_available
+                        ));
+                    }
+                    Ok(session)
                 })
-                .and_then(|peers| {
-                    println!("listing session peers");
-                    peers.for_each(|peer| println!("peer_id={:#?}", peer.node_id));
-                    future::ok(())
+                .and_then(move |session| {
+                    session.exec(
+                        cpus_requested,
+                        config.progname,
+                        config.args,
+                        config.mpiargs,
+                        deploy_prefix,
+                    )
+                })
+                .and_then(|output| {
+                    println!("Execution output:\n{}", output);
+                    Ok(())
                 })
                 .map_err(|e| show_error(&e))
                 .then(|fut| {
