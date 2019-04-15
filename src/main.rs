@@ -42,6 +42,7 @@ fn init_logger() {
 }
 
 // TODO proper exit code
+// TODO ctrlc
 fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;

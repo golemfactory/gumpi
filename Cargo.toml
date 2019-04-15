@@ -6,34 +6,25 @@ version = "0.1.0"
 [dependencies]
 actix = "0.7.9"
 bytes = "0.4.12"
-dirs = "1.0.5"
 env_logger = "0.6.1"
 failure = "0.1.5"
 futures = "0.1.26"
 log = "0.4.6"
 serde = "1.0.90"
 serde_derive = "1.0.90"
-serde_json = "1.0.39"
 structopt = "0.2.15"
 tokio = "0.1.18"
 tokio-signal = "0.2.7"
 toml = "0.5.0"
 
-[dependencies.actix-web]
-git = "https://github.com/marmistrz/actix-web"
-
 [dependencies.gu-model]
-branch = "gu-client-rpc-from"
-git = "https://github.com/marmistrz/golem-unlimited"
-
-[dependencies.gu-net]
-branch = "gu-client-rpc-from"
-git = "https://github.com/marmistrz/golem-unlimited"
+branch = "feature/gu-client-rpc"
+git = "https://github.com/golemfactory/golem-unlimited"
 
 [dependencies.gu-client]
-branch = "gu-client-rpc-from"
-git = "https://github.com/marmistrz/golem-unlimited"
+branch = "feature/gu-client-rpc"
+git = "https://github.com/golemfactory/golem-unlimited"
 
 [dependencies.gu-hardware]
-branch = "gu-client-rpc-from"
-git = "https://github.com/marmistrz/golem-unlimited"
+branch = "feature/gu-client-rpc"
+git = "https://github.com/golemfactory/golem-unlimited"

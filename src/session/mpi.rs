@@ -183,8 +183,8 @@ impl SessionMPI {
             })
             .and_then(|mut outs| {
                 info!("OUTS: {:?}", outs);
-                // TODO there are more outputs
-                Ok(outs.swap_remove(0))
+                // TODO document
+                Ok(outs.swap_remove(1))
             })
     }
 
