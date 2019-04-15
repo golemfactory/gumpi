@@ -37,3 +37,7 @@ progname = "uname"
 args = ["-a"]
 mpiargs = ["--mca", "btl_tcp_if_include", "10.30.8.0/22"]
 ```
+
+# Debugging
+gumpi cleanly closes the sessions by default, but this behavior may significantly complicate the debugging.
+To disable this behavior, pass the `--features "noclean_session"` parameter to cargo.
