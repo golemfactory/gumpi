@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+mod actix;
 mod failure_ext;
 mod jobconfig;
 mod session;
@@ -65,6 +66,10 @@ fn run() -> Fallible<()> {
         config.mpiargs,
         deploy_prefix,
     )?;
+
+    if let Some(output) = config.output {
+        mgr.retrieve_output(&output)?;
+    }
 
     Ok(())
 }

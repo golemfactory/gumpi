@@ -1,14 +1,24 @@
 # the name of the binary that will be produced
 progname = "game-life"
 # the command line arguments that should be passed to the program
-args = ["4", "3", "12000", "10"]
+args = ["2", "1", "12000", "10"]
 # (optional) extra arguments that should be passed to mpirun
-mpiargs = ["--mca", "btl_tcp_if_include", "10.30.8.0/22"]
+# mpiargs = ["--mca", "btl_tcp_if_include", "10.30.8.0/22"]
+
+# (optional) the configuration of the application output
+[output]
+# the path to the output directory, relatively to the application working directory
+# since game-life doesn't produce any meaningful output, we just send over
+# the application sources for demonstrative purposes
+source = "app"
+# desired path to the file containing the outputs from the provider,
+# relative to the program working directory
+target = "game-life-outs.tar"
 
 # (optional) configuration of the sources to be built on the provider machine
 # if missing, gumpi will assume that the binary is already present on the machine
 [sources]
-# path to the tarball containing the sources
+# path to the tarball containing the sources, relative to the configuration file
 path = "game-life.tar"
 # build system. Supported: "Make" or "CMake"
 mode = "CMake"

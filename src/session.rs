@@ -1,4 +1,4 @@
-use actix::prelude::*;
+use crate::actix::wait_ctrlc;
 use actix_web::{client::ClientRequest, http::Method, HttpMessage};
 use bytes::Bytes;
 use failure::{format_err, Fail, Fallible, ResultExt};
@@ -124,6 +124,20 @@ impl ProviderSession {
         self.exec_command(cmd)
     }
 
+    pub fn upload(
+        &self,
+        blob_url: String,
+        file_path: String,
+        format: ResourceFormat,
+    ) -> Fallible<String> {
+        let cmd = Command::UploadFile {
+            file_path,
+            format,
+            uri: blob_url,
+        };
+        self.exec_command(cmd)
+    }
+
     pub fn name(&self) -> &str {
         &self.peerinfo.peer_addr
     }
@@ -192,12 +206,17 @@ impl HubSession {
         reply.map_err(|err| format_err!("Provider {} replied: {}", provider.to_string(), err))
     }
 
-    /// Returns: blob id
-    pub fn upload(&self, payload: String) -> Fallible<BlobId> {
+    pub fn create_blob(&self) -> Fallible<(String, BlobId)> {
         info!("Creating a slot");
         let url = format!("http://{}/sessions/{}/blobs", self.hub_ip, self.session_id);
         let blob_id: u64 = query_deserialize(Method::POST, &url, ())?.expect("No content");
         let url = format!("{}/{}", url, blob_id);
+        Ok((url, blob_id))
+    }
+
+    /// Returns: blob id
+    pub fn upload(&self, payload: String) -> Fallible<BlobId> {
+        let (url, blob_id) = self.create_blob()?;
         info!("Uploading a file, id = {}", blob_id);
         debug!("File contents: {}", payload);
 
@@ -333,30 +352,6 @@ where
                                 .map(Some)
                         }),
                 ),
-            }
-        })
-}
-
-fn wait_ctrlc<F>(future: F) -> Fallible<F::Item>
-where
-    F: Future<Error = failure::Error>,
-{
-    let mut sys = System::new("gumpi");
-    let ctrlc = tokio_signal::ctrl_c()
-        .flatten_stream()
-        .into_future()
-        .map_err(|_| ());
-    let fut = future.select2(ctrlc);
-    sys.block_on(fut)
-        .map_err(|e| match e {
-            Either::A((e, _)) => e,
-            _ => panic!("Ctrl-C handling failed"),
-        })
-        .and_then(|res| match res {
-            Either::A((r, _)) => Ok(r),
-            Either::B(_) => {
-                info!("Ctrl-C received, cleaning-up...");
-                Err(format_err!("Ctrl-C received..."))
             }
         })
 }
