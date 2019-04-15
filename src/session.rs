@@ -204,7 +204,7 @@ impl HubSession {
         reply.map_err(|err| format_err!("Provider replied: {}", err))
     }
 
-    pub fn reserve_blob(&self) -> Fallible<(String, BlobId)> {
+    pub fn create_blob(&self) -> Fallible<(String, BlobId)> {
         info!("Creating a slot");
         let url = format!("http://{}/sessions/{}/blobs", self.hub_ip, self.session_id);
         let blob_id: u64 = query_deserialize(Method::POST, &url, ())?.expect("No content");
@@ -214,7 +214,7 @@ impl HubSession {
 
     /// Returns: blob id
     pub fn upload(&self, payload: String) -> Fallible<BlobId> {
-        let (url, blob_id) = self.reserve_blob()?;
+        let (url, blob_id) = self.create_blob()?;
         info!("Uploading a file, id = {}", blob_id);
         debug!("File contents: {}", payload);
 
