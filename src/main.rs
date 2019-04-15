@@ -11,10 +11,7 @@ use crate::{
 use actix::prelude::*;
 use failure::{format_err, Fallible, ResultExt};
 use failure_ext::FutureExt;
-use futures::{
-    future::{self, Either},
-    prelude::*,
-};
+use futures::future::{self, Either};
 use log::{error, info};
 use std::env;
 use structopt::StructOpt;
@@ -112,7 +109,8 @@ fn run() -> Fallible<()> {
                     fut
                 }),
         );
-    });
+    })
+    .expect("actix error");
 
     Ok(())
 }
