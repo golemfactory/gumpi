@@ -141,6 +141,7 @@ impl ProviderSession {
     }
 }
 
+#[cfg(not(feature = "clean_session"))]
 impl Drop for ProviderSession {
     fn drop(&mut self) {
         self.destroy()
@@ -201,7 +202,7 @@ impl HubSession {
         // TODO HACK investigate what should the error type be and get a decent error message
         let reply: Result<U, serde_json::Value> =
             query_deserialize(Method::POST, &url, payload)?.expect("No content");
-        reply.map_err(|err| format_err!("Provider replied: {}", err))
+        reply.map_err(|err| format_err!("Provider {} replied: {}", provider.to_string(), err))
     }
 
     pub fn create_blob(&self) -> Fallible<(String, BlobId)> {
@@ -272,6 +273,7 @@ impl HubSession {
     }
 }
 
+#[cfg(not(feature = "clean_session"))]
 impl Drop for HubSession {
     fn drop(&mut self) {
         self.destroy().expect("Destroying the hub session failed");

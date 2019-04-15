@@ -10,6 +10,7 @@ use futures::{
     future::{self, Either},
     prelude::*,
 };
+use gu_net::NodeId;
 use log::{info, warn};
 use std::{fs, net::SocketAddr, path::Path, rc::Rc};
 
@@ -19,7 +20,20 @@ pub struct SessionMPI {
 }
 
 impl SessionMPI {
-    pub fn init(hub_ip: SocketAddr, cpus_requested: usize) -> Fallible<Self> {
+    pub fn init(
+        hub_ip: SocketAddr,
+        cpus_requested: usize,
+        providers_filter: Option<Vec<NodeId>>,
+    ) -> Fallible<Self> {
+        if hub_ip.ip().is_loopback() {
+            warn!(
+                "The hub address {} is a loopback address. \
+                 This is discouraged and you may experience connectivity problems. \
+                 See issue #37.",
+                hub_ip
+            );
+        }
+
         let hub_session = HubSession::new(hub_ip)?;
         let hub_session = Rc::new(hub_session);
 
@@ -27,6 +41,13 @@ impl SessionMPI {
         let provider_sessions: Vec<ProviderSession> = providers
             .into_iter()
             .filter_map(|p| {
+                if let Some(filter) = &providers_filter {
+                    if !filter.contains(&p.node_id) {
+                        info!("Ignoring provider: {}", p.node_id.to_string());
+                        return None;
+                    }
+                }
+                info!("Connecting to provider: {}", p.node_id.to_string());
                 let sess = ProviderSession::new(Rc::clone(&hub_session), p);
                 match sess {
                     Err(e) => {
@@ -203,7 +224,7 @@ impl SessionMPI {
     pub fn retrieve_output(&self, output_cfg: &OutputConfig) -> Fallible<()> {
         // upload the file from the provider onto the hub
         info!("Uploading the job output onto the hub");
-        let (url, _) = self.hub_session.reserve_blob()?;
+        let (url, _) = self.hub_session.create_blob()?;
         let path = output_cfg
             .source
             .to_str()

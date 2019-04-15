@@ -10,6 +10,7 @@ use crate::{
     session::mpi::SessionMPI,
 };
 use failure::{Fallible, ResultExt};
+use log::debug;
 use std::env;
 use structopt::StructOpt;
 
@@ -36,7 +37,14 @@ fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
-    let mgr = SessionMPI::init(opt.hub, opt.numproc)?;
+    let prov_filter = if opt.providers.is_empty() {
+        None
+    } else {
+        debug!("Chosen providers: {:?}", opt.providers);
+        Some(opt.providers)
+    };
+
+    let mgr = SessionMPI::init(opt.hub, opt.numproc, prov_filter)?;
 
     let deploy_prefix;
     if let Some(sources) = config.sources {
