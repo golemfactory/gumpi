@@ -4,7 +4,7 @@ use crate::{
     jobconfig::{BuildType, Sources},
     session::gu_client_ext::PeerHardwareQuery,
 };
-use failure::ResultExt;
+use failure::{format_err, ResultExt};
 use futures::{
     future::{self, Either},
     prelude::*,
@@ -134,6 +134,8 @@ impl SessionMPI {
         mpiargs: Option<Vec<T>>,
         deploy_prefix: Option<String>,
     ) -> impl Future<Item = String, Error = failure::Error> {
+        use gu_client::error::Error as GUError;
+
         let root = self.root_provider();
         let mut cmdline = vec![];
 
@@ -170,23 +172,23 @@ impl SessionMPI {
             args: cmdline,
         };
 
-        use log::warn;
-
         root.session
             .update(vec![upload_cmd, exec_cmd])
-            .map_err(|e| {
-                warn!("{}", e);
-                e
+            .map_err(|e| match e {
+                GUError::ProcessingResult(outs) => {
+                    // TODO better display
+                    format_err!("Execution error: {:?}", outs)
+                }
+                x => x.into(),
             })
             .and_then(|mut outs| {
                 info!("OUTS: {:?}", outs);
+                // TODO there are more outputs
                 Ok(outs.swap_remove(0))
             })
-            .from_err()
     }
 
     // Returns: the deployment prefix
-    // TODO: separate cmd generation
     pub fn deploy(
         &self,
         config_path: PathBuf,
@@ -227,7 +229,7 @@ impl SessionMPI {
                 future::join_all(build_futs).and_then(|logs| {
                     Ok(DeploymentInfo {
                         logs,
-                        deploy_prefix: "/tmp".to_owned(),
+                        deploy_prefix: "/tmp/".to_owned(),
                     })
                 })
             })

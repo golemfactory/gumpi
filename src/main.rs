@@ -15,11 +15,12 @@ use futures::{
     future::{self, Either},
     prelude::*,
 };
-use log::info;
+use log::{error, info};
 use std::env;
 use structopt::StructOpt;
 
 fn show_error(e: &failure::Error) {
+    error!("There was an error");
     eprint!("error");
     for cause in e.iter_chain() {
         eprint!(": {}", cause);
