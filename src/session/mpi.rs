@@ -17,7 +17,7 @@ use gu_model::{
     session::HubSessionSpec,
 };
 use log::info;
-use std::{net::SocketAddr, path::Path};
+use std::{fs, net::SocketAddr, path::PathBuf};
 
 #[derive(Debug)]
 pub struct ProviderMPI {
@@ -158,45 +158,51 @@ impl SessionMPI {
         info!("HOSTFILE:\n{}", hostfile);
         // let hostfile_stream = stream::once::<_, actix_web::Error>(Ok(hostfile.into())) ;
 
-        unimplemented!("hostfile uploading");
-
-        /*self.hub_session
-        .new_blob()
-        .and_then(|blob| blob.upload_from_stream(hostfile_stream).from_err())
-        .from_err()*/
-
-        /*info!("Downloading the hostfile...");
-        let download_output = root.download(blob_id, "hostfile".to_owned(), ResourceFormat::Raw);
-        info!("Downloaded: {:?}", download_output);*/
+        let upload_cmd = Command::WriteFile {
+            content: hostfile,
+            file_path: "hostfile".to_owned(),
+        };
 
         info!("Executing mpirun with args {:?}...", cmdline);
+
         let exec_cmd = Command::Exec {
             executable: "mpirun".to_owned(),
             args: cmdline,
         };
+
         root.session
-            .update(vec![exec_cmd])
+            .update(vec![upload_cmd, exec_cmd])
             .and_then(|mut outs| Ok(outs.swap_remove(0)))
             .from_err()
     }
 
-    // FIXME lifetimes are broken
     // Returns: the deployment prefix
     pub fn deploy(
         &self,
-        config_path: &Path,
-        sources: &Sources,
-        progname: &str,
+        config_path: PathBuf,
+        sources: Sources,
+        progname: String,
     ) -> impl Future<Item = DeploymentInfo, Error = failure::Error> {
         let app_path = "app".to_owned();
         let tarball_path = config_path.join(&sources.path);
+
+        let tarball = fs::read(tarball_path).into_future();
 
         /*let blob_id = self
         .hub_session
         .upload_file(&tarball_path)
         .context("uploading file")?;*/
 
-        let build_futs = self.providers.iter().map(|provider| {
+        // TODO can we avoid splitting the map in two?
+        let sessions: Vec<_> = self
+            .providers
+            .iter()
+            .map(|p| (p.session.clone(), format!("{:?}", p)))
+            .collect();
+
+        let build_futs = sessions.into_iter().map(move |(session, disp)| {
+            let app_path = app_path.clone();
+            let progname = progname.clone();
             /*provider
             .download(blob_id, app_path.clone(), ResourceFormat::Tar)
             .context("downloading file")?;*/
@@ -223,7 +229,7 @@ impl SessionMPI {
             };
             let mv_cmd = Command::Exec {
                 executable: "mv".to_owned(),
-                args: vec![[&app_path, progname].join("/"), "tmp/".to_owned()],
+                args: vec![[app_path, progname].join("/"), "tmp/".to_owned()],
             };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
@@ -235,16 +241,15 @@ impl SessionMPI {
                 BuildType::CMake => vec![cmake_cmd, make_cmd],
             };
 
-            provider
-                .session
+            session
                 .update(cmds)
-                .context(format!("compiling the app on node {:?}", provider))
+                .context(format!("compiling the app on node {:?}", disp))
         });
-        let build = future::join_all(build_futs);
-        unimplemented!("FIXME return build instead of a dummy thing");
-        future::ok(DeploymentInfo {
-            logs: vec![vec![]],
-            deploy_prefix: "/tmp".to_owned(),
+        future::join_all(build_futs).and_then(|logs| {
+            Ok(DeploymentInfo {
+                logs,
+                deploy_prefix: "/tmp".to_owned(),
+            })
         })
     }
 }

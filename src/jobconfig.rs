@@ -8,13 +8,13 @@ use std::{
 };
 use structopt::StructOpt;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum BuildType {
     Make,
     CMake,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Sources {
     pub path: PathBuf,
     pub mode: BuildType,

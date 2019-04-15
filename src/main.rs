@@ -5,7 +5,7 @@ mod jobconfig;
 mod session;
 
 use crate::{
-    jobconfig::{JobConfig, Opt},
+    jobconfig::{JobConfig, Opt, Sources},
     session::mpi::{DeploymentInfo, SessionMPI},
 };
 use actix::prelude::*;
@@ -45,6 +45,7 @@ fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
+    let progname = config.progname.clone();
     let cpus_requested = opt.numproc;
 
     System::run(move || {
@@ -64,13 +65,14 @@ fn run() -> Fallible<()> {
                     Ok(session)
                 })
                 .and_then(move |session| {
-                    let deploy_prefix = if let Some(sources) = &config.sources {
+                    let deploy_prefix = if let Some(sources) = config.sources.clone() {
                         // It's safe to call unwrap here - at this point opt.jobconfig
                         // is guaranteed to be a valid filepath, which is checked by
                         // JobConfig::from_file
+                        let sources_dir = opt.jobconfig.parent().unwrap().to_owned();
                         Either::A(
                             session
-                                .deploy(opt.jobconfig.parent().unwrap(), &sources, &config.progname)
+                                .deploy(sources_dir, sources, progname)
                                 .context("deploying the sources")
                                 .and_then(|depl| {
                                     let DeploymentInfo {
