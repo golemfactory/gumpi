@@ -5,7 +5,7 @@ mod jobconfig;
 mod session;
 
 use crate::{
-    jobconfig::{JobConfig, Opt, Sources},
+    jobconfig::{JobConfig, Opt},
     session::mpi::{DeploymentInfo, SessionMPI},
 };
 use actix::prelude::*;

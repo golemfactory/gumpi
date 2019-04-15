@@ -9,10 +9,10 @@ use futures::{
     future::{self, Either},
     prelude::*,
 };
-use gu_client::r#async::{HubConnection, HubSession, PeerSession};
+use gu_client::r#async::{Blob, HubConnection, HubSession, PeerSession};
 use gu_hardware::actor::Hardware;
 use gu_model::{
-    envman::{Command, CreateSession, Image},
+    envman::{Command, CreateSession, Image, ResourceFormat},
     peers::PeerInfo,
     session::HubSessionSpec,
 };
@@ -114,8 +114,9 @@ impl SessionMPI {
                     .parse()
                     .unwrap_or_else(|_| panic!("GU returned an invalid IP address, {}", ip_sock));
                 let ip = ip_sock.ip();
+                let cpus = peer.hardware.num_cores();
 
-                format!("{} port=4222 slots={}", ip, 1) // TODO use peer.hardware.num_cores
+                format!("{} port=4222 slots={}", ip, cpus) // TODO use peer.hardware.num_cores
             })
             .collect();
         file_lines.join("\n")
@@ -156,7 +157,6 @@ impl SessionMPI {
 
         let hostfile = self.hostfile();
         info!("HOSTFILE:\n{}", hostfile);
-        // let hostfile_stream = stream::once::<_, actix_web::Error>(Ok(hostfile.into())) ;
 
         let upload_cmd = Command::WriteFile {
             content: hostfile,
@@ -170,13 +170,23 @@ impl SessionMPI {
             args: cmdline,
         };
 
+        use log::warn;
+
         root.session
             .update(vec![upload_cmd, exec_cmd])
-            .and_then(|mut outs| Ok(outs.swap_remove(0)))
+            .map_err(|e| {
+                warn!("{}", e);
+                e
+            })
+            .and_then(|mut outs| {
+                info!("OUTS: {:?}", outs);
+                Ok(outs.swap_remove(0))
+            })
             .from_err()
     }
 
     // Returns: the deployment prefix
+    // TODO: separate cmd generation
     pub fn deploy(
         &self,
         config_path: PathBuf,
@@ -186,75 +196,94 @@ impl SessionMPI {
         let app_path = "app".to_owned();
         let tarball_path = config_path.join(&sources.path);
 
-        let tarball = fs::read(tarball_path).into_future();
+        let tarball = fs::read(tarball_path).map(Into::into); // TODO
+        let tarball_stream = futures::stream::once(tarball);
 
-        /*let blob_id = self
-        .hub_session
-        .upload_file(&tarball_path)
-        .context("uploading file")?;*/
-
-        // TODO can we avoid splitting the map in two?
-        let sessions: Vec<_> = self
+        let deployments: Vec<_> = self
             .providers
             .iter()
-            .map(|p| (p.session.clone(), format!("{:?}", p)))
+            .map(|provider| (provider.session.clone(), format!("{:?}", provider)))
             .collect();
 
-        let build_futs = sessions.into_iter().map(move |(session, disp)| {
-            let app_path = app_path.clone();
-            let progname = progname.clone();
-            /*provider
-            .download(blob_id, app_path.clone(), ResourceFormat::Tar)
-            .context("downloading file")?;*/
-
-            // If we create a ProviderSession per provider, every session
-            // gets a unique identifier. This means that the resulting executable
-            // resides in a different directory on each of the provider nodes,
-            // which causes mpirun to fail.
-            // As a workaround, we provide a symlink to the /tmp directory
-            // in the image and put the resulting binary there.
-
-            // For the CMake backend we use the EXECUTABLE_OUTPUT_PATH CMake variable
-            // For the Make backend we just move the file around
-
-            let cmake_cmd = Command::Exec {
-                executable: "cmake/bin/cmake".to_owned(),
-                args: vec![
-                    app_path.clone(),
-                    "-DCMAKE_C_COMPILER=mpicc".to_owned(),
-                    "-DCMAKE_CXX_COMPILER=mpicxx".to_owned(),
-                    "-DCMAKE_BUILD_TYPE=Release".to_owned(),
-                    "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(), // TODO fix path for Make
-                ],
-            };
-            let mv_cmd = Command::Exec {
-                executable: "mv".to_owned(),
-                args: vec![[app_path, progname].join("/"), "tmp/".to_owned()],
-            };
-            let make_cmd = Command::Exec {
-                executable: "make".to_owned(),
-                args: vec![],
-            };
-
-            let cmds = match &sources.mode {
-                BuildType::Make => vec![make_cmd, mv_cmd],
-                BuildType::CMake => vec![cmake_cmd, make_cmd],
-            };
-
-            session
-                .update(cmds)
-                .context(format!("compiling the app on node {:?}", disp))
-        });
-        future::join_all(build_futs).and_then(|logs| {
-            Ok(DeploymentInfo {
-                logs,
-                deploy_prefix: "/tmp".to_owned(),
+        self.hub_session
+            .new_blob()
+            .from_err()
+            .and_then(move |blob| {
+                blob.upload_from_stream(tarball_stream)
+                    .from_err()
+                    .and_then(move |_| Ok(blob))
             })
-        })
+            .and_then(move |blob| {
+                let cmds = generate_deployment_cmds(app_path, blob, progname, sources.mode);
+                let build_futs = deployments
+                    .into_iter()
+                    .map(move |(session, display)| {
+                        session
+                            .update(cmds.clone())
+                            .context(format!("compiling the app on node {:?}", display))
+                    })
+                    .collect::<Vec<_>>();
+
+                future::join_all(build_futs).and_then(|logs| {
+                    Ok(DeploymentInfo {
+                        logs,
+                        deploy_prefix: "/tmp".to_owned(),
+                    })
+                })
+            })
     }
 }
 
 pub struct DeploymentInfo {
     pub logs: Vec<Vec<String>>, // TODO match with providers
     pub deploy_prefix: String,
+}
+
+/// app_path: the directory where the app sources should reside
+///             on the provider side
+fn generate_deployment_cmds(
+    app_path: String,
+    blob: Blob,
+    progname: String,
+    mode: BuildType,
+) -> Vec<Command> {
+    let download_cmd = Command::DownloadFile {
+        format: ResourceFormat::Tar,
+        uri: blob.uri(),
+        file_path: app_path.clone(),
+    };
+
+    // If we create a session per provider, every session
+    // gets a unique identifier. This means that the resulting executable
+    // resides in a different directory on each of the provider nodes,
+    // which causes mpirun to fail.
+    // As a workaround, we provide a symlink to the /tmp directory
+    // in the image and put the resulting binary there.
+
+    // For the CMake backend we use the EXECUTABLE_OUTPUT_PATH CMake variable
+    // For the Make backend we just move the file around
+    let cmake_cmd = Command::Exec {
+        executable: "cmake/bin/cmake".to_owned(),
+        args: vec![
+            app_path.clone(),
+            "-DCMAKE_C_COMPILER=mpicc".to_owned(),
+            "-DCMAKE_CXX_COMPILER=mpicxx".to_owned(),
+            "-DCMAKE_BUILD_TYPE=Release".to_owned(),
+            "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(), // TODO fix path for Make
+        ],
+    };
+
+    let mv_cmd = Command::Exec {
+        executable: "mv".to_owned(),
+        args: vec![[app_path, progname].join("/"), "tmp/".to_owned()],
+    };
+    let make_cmd = Command::Exec {
+        executable: "make".to_owned(),
+        args: vec![],
+    };
+
+    match mode {
+        BuildType::Make => vec![download_cmd, make_cmd, mv_cmd],
+        BuildType::CMake => vec![download_cmd, cmake_cmd, make_cmd],
+    }
 }
