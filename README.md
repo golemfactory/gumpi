@@ -4,7 +4,7 @@ CircleCI status: [![status](https://circleci.com/gh/golemfactory/gumpi.svg?style
 Known to work with [this GU version](https://github.com/golemfactory/golem-unlimited/tree/gumpi-freeze), commit 93c9f37e1765ad743a6b16209561e6374fb88e84.
 
 Minimum supported version:
-* Rust: 1.32
+* Rust: 1.33
 * OpenMPI: 3.0
 
 # Docker image
