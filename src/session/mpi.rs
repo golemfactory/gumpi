@@ -177,13 +177,14 @@ impl SessionMPI {
             .map_err(|e| match e {
                 GUError::ProcessingResult(outs) => {
                     // TODO better display
+                    // TODO which of the commands failed?
                     format_err!("Execution error: {:?}", outs)
                 }
                 x => x.into(),
             })
             .and_then(|mut outs| {
-                info!("OUTS: {:?}", outs);
-                // TODO document
+                // outs should be a vector of length 2, of form ["OK", execution_output]
+                // only the latter is interesting to us
                 Ok(outs.swap_remove(1))
             })
     }
@@ -198,7 +199,9 @@ impl SessionMPI {
         let app_path = "app".to_owned();
         let tarball_path = config_path.join(&sources.path);
 
-        let tarball = fs::read(tarball_path).map(Into::into); // TODO
+        // TODO read the file asynchronously
+        // TODO create the tarball on the fly?
+        let tarball = fs::read(tarball_path).map(Into::into);
         let tarball_stream = futures::stream::once(tarball);
 
         let deployments: Vec<_> = self

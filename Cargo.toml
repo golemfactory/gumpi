@@ -4,7 +4,7 @@ edition = "2018"
 name = "gumpi"
 version = "0.1.0"
 [dependencies]
-actix = "0.8.0"
+actix = "0.8.1"
 bytes = "0.4.12"
 env_logger = "0.6.1"
 failure = "0.1.5"
