@@ -28,8 +28,8 @@ pub struct ProviderMPI {
 }
 
 pub struct SessionMPI {
-    pub providers: Vec<ProviderMPI>,
-    pub hub_session: HubSession, // TODO private
+    providers: Vec<ProviderMPI>,
+    hub_session: HubSession,
 }
 
 const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image-test.hdi";
