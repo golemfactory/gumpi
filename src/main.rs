@@ -74,8 +74,14 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                                 logs,
                                 deploy_prefix,
                             } = depl;
-                            // TODO better display of compilation logs
-                            info!("build logs:\n{:#?}", logs);
+                            for comp in logs {
+                                let logs = comp.logs.join("\n------------------\n");
+                                info!(
+                                    "Provider {} compilation output:\n{}",
+                                    comp.node.to_string(),
+                                    logs
+                                );
+                            }
                             Ok(Some(deploy_prefix))
                         }),
                 )

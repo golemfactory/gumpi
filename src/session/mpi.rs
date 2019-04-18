@@ -212,7 +212,7 @@ impl SessionMPI {
         let deployments: Vec<_> = self
             .providers
             .iter()
-            .map(|provider| (provider.session.clone(), format!("{:?}", provider)))
+            .map(|provider| provider.session.clone())
             .collect();
 
         self.hub_session
@@ -227,11 +227,11 @@ impl SessionMPI {
                 let cmds = generate_deployment_cmds(app_path, blob, progname, sources.mode);
                 let build_futs = deployments
                     .into_iter()
-                    .map(move |(session, display)| {
+                    .map(move |session| {
                         let node = session.node_id();
                         session
                             .update(cmds.clone())
-                            .context(format!("compiling the app on node {:?}", display))
+                            .context(format!("compiling the app on node {}", node.to_string()))
                             .and_then(move |logs| Ok(CompilationInfo { logs, node }))
                     })
                     .collect::<Vec<_>>();
@@ -287,7 +287,7 @@ fn generate_deployment_cmds(
             "-DCMAKE_C_COMPILER=mpicc".to_owned(),
             "-DCMAKE_CXX_COMPILER=mpicxx".to_owned(),
             "-DCMAKE_BUILD_TYPE=Release".to_owned(),
-            "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(), // TODO fix path for Make
+            "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(),
         ],
     };
 
