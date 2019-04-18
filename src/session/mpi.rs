@@ -16,6 +16,7 @@ use gu_model::{
     peers::PeerInfo,
     session::HubSessionSpec,
 };
+use gu_net::NodeId;
 use log::info;
 use std::{fs, net::SocketAddr, path::PathBuf};
 
@@ -116,7 +117,7 @@ impl SessionMPI {
                 let ip = ip_sock.ip();
                 let cpus = peer.hardware.num_cores();
 
-                format!("{} port=4222 slots={}", ip, cpus) // TODO use peer.hardware.num_cores
+                format!("{} port=4222 slots={}", ip, cpus)
             })
             .collect();
         file_lines.join("\n")
@@ -176,9 +177,13 @@ impl SessionMPI {
             .update(vec![upload_cmd, exec_cmd])
             .map_err(|e| match e {
                 GUError::ProcessingResult(outs) => {
-                    // TODO better display
-                    // TODO which of the commands failed?
-                    format_err!("Execution error: {:?}", outs)
+                    assert_eq!(outs.len(), 2);
+
+                    if outs[0] == "OK" {
+                        format_err!("Execution error:\n{}", outs[1])
+                    } else {
+                        format_err!("WriteFile failed: {}", outs[0])
+                    }
                 }
                 x => x.into(),
             })
@@ -223,9 +228,11 @@ impl SessionMPI {
                 let build_futs = deployments
                     .into_iter()
                     .map(move |(session, display)| {
+                        let node = session.node_id();
                         session
                             .update(cmds.clone())
                             .context(format!("compiling the app on node {:?}", display))
+                            .and_then(move |logs| Ok(CompilationInfo { logs, node }))
                     })
                     .collect::<Vec<_>>();
 
@@ -240,8 +247,14 @@ impl SessionMPI {
 }
 
 pub struct DeploymentInfo {
-    pub logs: Vec<Vec<String>>, // TODO match with providers
+    pub logs: Vec<CompilationInfo>,
     pub deploy_prefix: String,
+}
+
+#[derive(Debug)]
+pub struct CompilationInfo {
+    pub node: NodeId,
+    pub logs: Vec<String>,
 }
 
 /// app_path: the directory where the app sources should reside

@@ -11,7 +11,10 @@ use crate::{
 use actix::prelude::*;
 use failure::{format_err, Fallible, ResultExt};
 use failure_ext::FutureExt;
-use futures::future::{self, Either};
+use futures::{
+    future::{self, Either},
+    prelude::*,
+};
 use log::info;
 use std::env;
 use structopt::StructOpt;
@@ -97,6 +100,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
             Ok(())
         })
         .then(|fut| {
+            // TODO is the manual system stop actually needed??
             actix::System::current().stop();
             fut
         })

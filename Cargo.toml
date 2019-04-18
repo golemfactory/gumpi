@@ -4,7 +4,7 @@ edition = "2018"
 name = "gumpi"
 version = "0.1.0"
 [dependencies]
-actix = "0.8.1"
+actix = "0.7"
 bytes = "0.4.12"
 env_logger = "0.6.1"
 failure = "0.1.5"
@@ -26,5 +26,9 @@ branch = "feature/gu-client-rpc"
 git = "https://github.com/golemfactory/golem-unlimited"
 
 [dependencies.gu-hardware]
+branch = "feature/gu-client-rpc"
+git = "https://github.com/golemfactory/golem-unlimited"
+
+[dependencies.gu-net]
 branch = "feature/gu-client-rpc"
 git = "https://github.com/golemfactory/golem-unlimited"
