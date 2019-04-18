@@ -18,6 +18,7 @@ COPY --from=build /usr/local/cargo/bin/gu-hub /usr/bin/gu-hub
 COPY --from=build /usr/local/cargo/bin/gumpi /usr/bin/gumpi
 COPY --from=build /golem-unlimited/gu-hub/webapp /opt/hub/webapp/
 COPY --from=build /examples /examples
+ADD correct-output.txt /examples/correct-output.txt
 WORKDIR /opt/hub
 ENV RUST_LOG=info
 EXPOSE 61622
