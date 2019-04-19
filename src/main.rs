@@ -1,10 +1,12 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
+mod async_ctrlc;
 mod failure_ext;
 mod jobconfig;
 mod session;
 
 use crate::{
+    async_ctrlc::AsyncCtrlc,
     jobconfig::{JobConfig, Opt},
     session::mpi::{DeploymentInfo, SessionMPI},
 };
@@ -19,6 +21,7 @@ use log::info;
 use std::env;
 use structopt::StructOpt;
 
+// TODO print a meaningful message in case of CtrlcEvent
 fn show_error(e: &failure::Error) {
     eprint!("Error");
     for cause in e.iter_chain() {
@@ -105,8 +108,10 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
             println!("Execution output:\n{}", output);
             Ok(())
         })
+        .handle_ctrlc()
         .then(|fut| {
             // TODO is the manual system stop actually needed??
+            info!("Cleaning up...");
             actix::System::current().stop();
             fut
         })

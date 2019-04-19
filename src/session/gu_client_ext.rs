@@ -4,7 +4,7 @@ use gu_client::r#async::{Peer, ProviderRef};
 use gu_hardware::actor::{Hardware, HardwareQuery};
 
 pub trait PeerHardwareQuery {
-    fn hardware(&self) -> Box<dyn Future<Item = Hardware, Error = failure::Error>>; //
+    fn hardware(&self) -> Box<dyn Future<Item = Hardware, Error = failure::Error>>;
 }
 
 impl PeerHardwareQuery for Peer {
