@@ -7,10 +7,11 @@ RUN mkdir /src
 COPY . /src
 RUN cargo install --path /src
 RUN git clone https://github.com/marmistrz/game-life.git && \
-	cd /game-life && \
-	mkdir -p /examples && \
-	git archive --format tar -o /examples/game-life.tar master && \
-	cp /src/examples/game-life.toml /examples
+        cd /game-life && \
+        mkdir -p /examples && \
+        git archive --format tar -o /examples/game-life.tar master && \
+        cp /src/examples/game-life.toml /examples && \
+        cp /src/examples/correct-output.txt /examples
 
 FROM ubuntu
 RUN mkdir -p /opt/hub
@@ -18,7 +19,6 @@ COPY --from=build /usr/local/cargo/bin/gu-hub /usr/bin/gu-hub
 COPY --from=build /usr/local/cargo/bin/gumpi /usr/bin/gumpi
 COPY --from=build /golem-unlimited/gu-hub/webapp /opt/hub/webapp/
 COPY --from=build /examples /examples
-ADD correct-output.txt /examples/correct-output.txt
 WORKDIR /opt/hub
 ENV RUST_LOG=info
 EXPOSE 61622
