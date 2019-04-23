@@ -21,7 +21,7 @@ pub struct Sources {
     pub mode: BuildType,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutputConfig {
     pub source: PathBuf,
     pub target: PathBuf,

@@ -59,6 +59,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
         debug!("Chosen providers: {:?}", opt.providers);
         Some(opt.providers)
     };
+    let output_cfg = config.output.clone();
 
     // It's safe to call unwrap here - at this point opt.jobconfig
     // is guaranteed to be a valid filepath, which is checked by
@@ -112,17 +113,24 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
             future::ok(session)
                 .join(deploy_prefix)
                 .and_then(move |(session, deploy_prefix)| {
-                    session.exec(
-                        cpus_requested,
-                        config.progname,
-                        config.args,
-                        config.mpiargs,
-                        deploy_prefix,
-                    )
+                    session
+                        .exec(
+                            cpus_requested,
+                            config.progname,
+                            config.args,
+                            config.mpiargs,
+                            deploy_prefix,
+                        )
+                        .join(future::ok(session))
                 })
         })
-        .and_then(|output| {
+        .and_then(|(output, session)| {
             println!("Execution output:\n{}", output);
+            /*if let Some(outs) = output_cfg {
+                session.retrieve_output(&outs)
+            } else {
+                future::ok(())
+            }*/
             Ok(())
         })
         .handle_ctrlc()
