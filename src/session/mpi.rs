@@ -36,9 +36,11 @@ const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image-test.hdi";
 const GUMPI_IMAGE_SHA1: &str = "367c891fb2fc603ab36fae67e8cfe1d1e8c28ff8";
 
 // TODO warn about loopback addresses
-// TODO add provider filtering
 impl SessionMPI {
-    pub fn init(hub_ip: SocketAddr) -> impl Future<Item = SessionMPI, Error = failure::Error> {
+    pub fn init(
+        hub_ip: SocketAddr,
+        prov_filter: Option<Vec<NodeId>>,
+    ) -> impl Future<Item = SessionMPI, Error = failure::Error> {
         println!("initializing");
         let hub_conn = HubConnection::from_addr(hub_ip.to_string()).context("invalid hub address");
         let hub_conn = match hub_conn {
@@ -69,7 +71,24 @@ impl SessionMPI {
 
                 let peers: Vec<_> = peers.collect();
                 info!("peers available: {:?}", peers);
-                let nodes: Vec<_> = peers.iter().map(|p| &p.node_id).cloned().collect();
+                let nodes: Vec<_> = peers
+                    .iter()
+                    .map(|p| &p.node_id)
+                    .filter(|node_id| {
+                        // If the user wants to filter the providers, do it
+                        let remains = prov_filter
+                            .as_ref()
+                            .map(|provs| provs.contains(node_id))
+                            .unwrap_or(true);
+
+                        if !remains {
+                            info!("Ignoring provider: {}", node_id.to_string());
+                        };
+
+                        remains
+                    })
+                    .cloned()
+                    .collect();
 
                 hub_session
                     .add_peers(nodes)
@@ -77,6 +96,7 @@ impl SessionMPI {
                     .and_then(move |nodes| {
                         let peer_sessions =
                             nodes.into_iter().zip(peers).map(move |(node_id, info)| {
+                                info!("Connecting to peer {}", node_id.to_string());
                                 let peer = peers_session.peer(node_id);
                                 let hardware = peer.hardware().context("getting hardware info");
                                 let sess = peer
@@ -308,42 +328,42 @@ fn generate_deployment_cmds(
 
 /*
 
-    pub fn retrieve_output(&self, output_cfg: &OutputConfig) -> Fallible<()> {
-        // upload the file from the provider onto the hub
-        info!("Uploading the job output onto the hub");
-        let (url, _) = self.hub_session.create_blob()?;
-        let path = output_cfg
-            .source
-            .to_str()
-            .ok_or_context("output_path is not valid unicode")?
-            .to_owned();
-        let out_log = self
-            .root_provider()
-            .upload(url.clone(), path, ResourceFormat::Tar)?;
-        info!("File uploaded: {}", out_log);
+pub fn retrieve_output(&self, output_cfg: &OutputConfig) -> Fallible<()> {
+    // upload the file from the provider onto the hub
+    info!("Uploading the job output onto the hub");
+    let (url, _) = self.hub_session.create_blob()?;
+    let path = output_cfg
+        .source
+        .to_str()
+        .ok_or_context("output_path is not valid unicode")?
+        .to_owned();
+    let out_log = self
+        .root_provider()
+        .upload(url.clone(), path, ResourceFormat::Tar)?;
+    info!("File uploaded: {}", out_log);
 
-        info!("Downloading the outputs from the hub");
-        let future = client::ClientRequest::get(url)
-            .finish()
-            .unwrap()
-            .send()
-            .from_err()
-            .and_then(|response| {
-                let status = response.status();
-                if status.is_success() {
-                    Either::A(response.body().limit(1024 * 1024 * 1024).from_err()) // 1 GiB limit
-                } else {
-                    let err = format_err!("Error downloading the outputs: {}", status);
-                    Either::B(future::err(err))
-                }
-            });
-        let output = wait_ctrlc(future).context("Downloading the file")?;
+    info!("Downloading the outputs from the hub");
+    let future = client::ClientRequest::get(url)
+        .finish()
+        .unwrap()
+        .send()
+        .from_err()
+        .and_then(|response| {
+            let status = response.status();
+            if status.is_success() {
+                Either::A(response.body().limit(1024 * 1024 * 1024).from_err()) // 1 GiB limit
+            } else {
+                let err = format_err!("Error downloading the outputs: {}", status);
+                Either::B(future::err(err))
+            }
+        });
+    let output = wait_ctrlc(future).context("Downloading the file")?;
 
-        info!("Writing the outputs...");
-        let output_file = &output_cfg.target;
-        fs::write(output_file, output).context("Writing the outputs")?;
-        info!("Outputs written to {}", output_file.to_string_lossy());
+    info!("Writing the outputs...");
+    let output_file = &output_cfg.target;
+    fs::write(output_file, output).context("Writing the outputs")?;
+    info!("Outputs written to {}", output_file.to_string_lossy());
 
-        Ok(())
-    }
-    */
+    Ok(())
+}
+*/

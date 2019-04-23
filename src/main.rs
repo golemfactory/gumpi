@@ -18,7 +18,7 @@ use futures::{
     future::{self, Either},
     prelude::*,
 };
-use log::info;
+use log::{debug, info};
 use std::env;
 use structopt::StructOpt;
 
@@ -53,7 +53,23 @@ fn init_logger() {
 fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = failure::Error> {
     let progname = config.progname.clone();
     let cpus_requested = opt.numproc;
-    SessionMPI::init(opt.hub)
+    let prov_filter = if opt.providers.is_empty() {
+        None
+    } else {
+        debug!("Chosen providers: {:?}", opt.providers);
+        Some(opt.providers)
+    };
+
+    // It's safe to call unwrap here - at this point opt.jobconfig
+    // is guaranteed to be a valid filepath, which is checked by
+    // JobConfig::from_file in main.rs
+    let sources_dir = opt
+        .jobconfig
+        .parent()
+        .expect("Invalid jobconfig path")
+        .to_owned();
+
+    SessionMPI::init(opt.hub, prov_filter)
         .context("initializing session")
         .and_then(move |session| {
             info!("available cores: {}", session.total_cpus());
@@ -69,10 +85,6 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
         })
         .and_then(move |session| {
             let deploy_prefix = if let Some(sources) = config.sources.clone() {
-                // It's safe to call unwrap here - at this point opt.jobconfig
-                // is guaranteed to be a valid filepath, which is checked by
-                // JobConfig::from_file
-                let sources_dir = opt.jobconfig.parent().unwrap().to_owned();
                 Either::A(
                     session
                         .deploy(sources_dir, sources, progname)
@@ -131,14 +143,8 @@ fn run() -> Fallible<()> {
     let mut sys = System::new("gumpi");
     sys.block_on(gumpi_async(opt, config))
 
-    // TODO add provider filtering
     // TODO retrieve output
-    /*let prov_filter = if opt.providers.is_empty() {
-        None
-    } else {
-        debug!("Chosen providers: {:?}", opt.providers);
-        Some(opt.providers)
-    };
+    /*
 
     let mgr = SessionMPI::init(opt.hub, opt.numproc, prov_filter)?;
 
