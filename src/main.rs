@@ -6,7 +6,7 @@ mod jobconfig;
 mod session;
 
 use crate::{
-    async_ctrlc::AsyncCtrlc,
+    async_ctrlc::{AsyncCtrlc, CtrlcEvent},
     jobconfig::{JobConfig, Opt},
     session::mpi::{DeploymentInfo, SessionMPI},
 };
@@ -21,13 +21,17 @@ use log::info;
 use std::env;
 use structopt::StructOpt;
 
-// TODO print a meaningful message in case of CtrlcEvent
 fn show_error(e: &failure::Error) {
-    eprint!("Error");
-    for cause in e.iter_chain() {
-        eprint!(": {}", cause);
-    }
-    eprintln!("");
+    match e.downcast_ref::<CtrlcEvent>() {
+        Some(_) => eprintln!("Exection interrupted..."),
+        None => {
+            eprint!("Error");
+            for cause in e.iter_chain() {
+                eprint!(": {}", cause);
+            }
+            eprintln!("");
+        }
+    };
     std::process::exit(1);
 }
 
@@ -111,13 +115,13 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
         .handle_ctrlc()
         .then(|fut| {
             // TODO is the manual system stop actually needed??
+            // TODO manual cleanup
             info!("Cleaning up...");
             actix::System::current().stop();
             fut
         })
 }
 
-// TODO handle ctrlc
 fn run() -> Fallible<()> {
     let opt = Opt::from_args();
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;

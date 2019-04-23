@@ -204,8 +204,6 @@ impl SessionMPI {
         let app_path = "app".to_owned();
         let tarball_path = config_path.join(&sources.path);
 
-        // TODO read the file asynchronously
-        // TODO create the tarball on the fly?
         let tarball = fs::read(tarball_path).map(Into::into);
         let tarball_stream = futures::stream::once(tarball);
 
