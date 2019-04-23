@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
+
 mod async_ctrlc;
 mod failure_ext;
 mod jobconfig;
@@ -116,6 +117,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
         .then(|fut| {
             // TODO is the manual system stop actually needed??
             // TODO manual cleanup
+            // TODO an option to disable cleanup
             info!("Cleaning up...");
             actix::System::current().stop();
             fut
@@ -128,4 +130,42 @@ fn run() -> Fallible<()> {
 
     let mut sys = System::new("gumpi");
     sys.block_on(gumpi_async(opt, config))
+
+    // TODO add provider filtering
+    // TODO retrieve output
+    /*let prov_filter = if opt.providers.is_empty() {
+        None
+    } else {
+        debug!("Chosen providers: {:?}", opt.providers);
+        Some(opt.providers)
+    };
+
+    let mgr = SessionMPI::init(opt.hub, opt.numproc, prov_filter)?;
+
+    let deploy_prefix;
+    if let Some(sources) = config.sources {
+        // It's safe to call unwrap here - at this point opt.jobconfig
+        // is guaranteed to be a valid filepath, which is checked by
+        // JobConfig::from_file
+        let prefix = mgr
+            .deploy(opt.jobconfig.parent().unwrap(), &sources, &config.progname)
+            .context("deploying the sources")?;
+        deploy_prefix = Some(prefix);
+    } else {
+        deploy_prefix = None;
+    }
+
+    mgr.exec(
+        opt.numproc,
+        config.progname,
+        config.args,
+        config.mpiargs,
+        deploy_prefix,
+    )?;
+
+    if let Some(output) = config.output {
+        mgr.retrieve_output(&output)?;
+    }
+
+    Ok(())*/
 }

@@ -37,3 +37,8 @@ progname = "uname"
 args = ["-a"]
 mpiargs = ["--mca", "btl_tcp_if_include", "10.30.8.0/22"]
 ```
+
+Currently gumpi limits the accepted size of the stdout and the returned output to 1GiB. Should this be a problem for your application, please report an issue.
+# Debugging
+gumpi cleanly closes the sessions by default, but this behavior may significantly complicate the debugging.
+To disable this behavior, pass the `--features "noclean_session"` parameter to cargo.

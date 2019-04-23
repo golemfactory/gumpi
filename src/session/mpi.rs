@@ -35,6 +35,8 @@ pub struct SessionMPI {
 const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image-test.hdi";
 const GUMPI_IMAGE_SHA1: &str = "367c891fb2fc603ab36fae67e8cfe1d1e8c28ff8";
 
+// TODO warn about loopback addresses
+// TODO add provider filtering
 impl SessionMPI {
     pub fn init(hub_ip: SocketAddr) -> impl Future<Item = SessionMPI, Error = failure::Error> {
         println!("initializing");
@@ -303,3 +305,45 @@ fn generate_deployment_cmds(
         BuildType::CMake => vec![download_cmd, cmake_cmd, make_cmd],
     }
 }
+
+/*
+
+    pub fn retrieve_output(&self, output_cfg: &OutputConfig) -> Fallible<()> {
+        // upload the file from the provider onto the hub
+        info!("Uploading the job output onto the hub");
+        let (url, _) = self.hub_session.create_blob()?;
+        let path = output_cfg
+            .source
+            .to_str()
+            .ok_or_context("output_path is not valid unicode")?
+            .to_owned();
+        let out_log = self
+            .root_provider()
+            .upload(url.clone(), path, ResourceFormat::Tar)?;
+        info!("File uploaded: {}", out_log);
+
+        info!("Downloading the outputs from the hub");
+        let future = client::ClientRequest::get(url)
+            .finish()
+            .unwrap()
+            .send()
+            .from_err()
+            .and_then(|response| {
+                let status = response.status();
+                if status.is_success() {
+                    Either::A(response.body().limit(1024 * 1024 * 1024).from_err()) // 1 GiB limit
+                } else {
+                    let err = format_err!("Error downloading the outputs: {}", status);
+                    Either::B(future::err(err))
+                }
+            });
+        let output = wait_ctrlc(future).context("Downloading the file")?;
+
+        info!("Writing the outputs...");
+        let output_file = &output_cfg.target;
+        fs::write(output_file, output).context("Writing the outputs")?;
+        info!("Outputs written to {}", output_file.to_string_lossy());
+
+        Ok(())
+    }
+    */
