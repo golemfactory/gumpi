@@ -1,9 +1,10 @@
 //use super::{Command, ProviderSession, ResourceFormat};
 use crate::{
-    failure_ext::FutureExt,
-    jobconfig::{BuildType, Sources, OutputConfig},
+    failure_ext::{FutureExt, OptionExt},
+    jobconfig::{BuildType, OutputConfig, Sources},
     session::gu_client_ext::PeerHardwareQuery,
 };
+use actix_web::{client, HttpMessage};
 use failure::{format_err, ResultExt};
 use futures::{
     future::{self, Either},
@@ -273,45 +274,62 @@ impl SessionMPI {
             })
     }
 
-/*
-    pub fn retrieve_output(&self, output_cfg: &OutputConfig) -> Fallible<()> {
-        // upload the file from the provider onto the hub
-        info!("Uploading the job output onto the hub");
-        let (url, _) = self.hub_session.create_blob()?;
+    pub fn retrieve_output(
+        &self,
+        output_cfg: &OutputConfig,
+    ) -> impl Future<Item = (), Error = failure::Error> {
         let path = output_cfg
             .source
             .to_str()
-            .ok_or_context("output_path is not valid unicode")?
-            .to_owned();
-        let out_log = self
-            .root_provider()
-            .upload(url.clone(), path, ResourceFormat::Tar)?;
-        info!("File uploaded: {}", out_log);
+            .ok_or_context("output_path is not valid unicode")
+            .map(str::to_owned)
+            .into_future()
+            .map_err(failure::Error::from);
+        let output_file = output_cfg.target.clone();
+        let blob = self.hub_session.new_blob().from_err();
+        let root_session = self.root_provider().session.clone();
 
-        info!("Downloading the outputs from the hub");
-        let future = client::ClientRequest::get(url)
-            .finish()
-            .unwrap()
-            .send()
-            .from_err()
-            .and_then(|response| {
-                let status = response.status();
-                if status.is_success() {
-                    Either::A(response.body().limit(1024 * 1024 * 1024).from_err()) // 1 GiB limit
-                } else {
-                    let err = format_err!("Error downloading the outputs: {}", status);
-                    Either::B(future::err(err))
-                }
-            });
-        let output = wait_ctrlc(future).context("Downloading the file")?;
-
-        info!("Writing the outputs...");
-        let output_file = &output_cfg.target;
-        fs::write(output_file, output).context("Writing the outputs")?;
-        info!("Outputs written to {}", output_file.to_string_lossy());
-
-        Ok(())
-    }*/
+        blob.join(path)
+            .and_then(move |(blob, path)| {
+                info!("Uploading the outputs from the provider to the hub");
+                let cmd = Command::UploadFile {
+                    file_path: path,
+                    format: ResourceFormat::Tar,
+                    uri: blob.uri(),
+                };
+                root_session
+                    .update(vec![cmd])
+                    .context("uploading the outputs from the provider to the hub")
+                    .and_then(|_| future::ok(blob))
+            })
+            .and_then(|blob| {
+                info!("Downloading the outputs from the hub");
+                client::ClientRequest::get(blob.uri())
+                    .finish()
+                    .unwrap()
+                    .send()
+                    .context("Downloading the outputs from the hub")
+                    .and_then(|response| {
+                        let status = response.status();
+                        if status.is_success() {
+                            // TODO stream the file instead of reading it whole
+                            Either::A(response.body().limit(1024 * 1024 * 1024).from_err()) // 1 GiB limit
+                        } else {
+                            let err = format_err!("Error downloading the outputs: {}", status);
+                            Either::B(future::err(err))
+                        }
+                    })
+            })
+            .and_then(|body| {
+                info!(
+                    "Writing the application outputs to {}",
+                    output_file.to_string_lossy()
+                );
+                fs::write(output_file, body)
+                    .context("Writing the outputs")
+                    .map_err(Into::into)
+            })
+    }
 }
 
 pub struct DeploymentInfo {

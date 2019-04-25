@@ -126,12 +126,11 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
         })
         .and_then(|(output, session)| {
             println!("Execution output:\n{}", output);
-            /*if let Some(outs) = output_cfg {
-                session.retrieve_output(&outs)
+            if let Some(outs) = output_cfg {
+                Either::A(session.retrieve_output(&outs))
             } else {
-                future::ok(())
-            }*/
-            Ok(())
+                Either::B(future::ok(()))
+            }
         })
         .handle_ctrlc()
         .then(|fut| {
@@ -150,36 +149,4 @@ fn run() -> Fallible<()> {
 
     let mut sys = System::new("gumpi");
     sys.block_on(gumpi_async(opt, config))
-
-    // TODO retrieve output
-    /*
-
-    let mgr = SessionMPI::init(opt.hub, opt.numproc, prov_filter)?;
-
-    let deploy_prefix;
-    if let Some(sources) = config.sources {
-        // It's safe to call unwrap here - at this point opt.jobconfig
-        // is guaranteed to be a valid filepath, which is checked by
-        // JobConfig::from_file
-        let prefix = mgr
-            .deploy(opt.jobconfig.parent().unwrap(), &sources, &config.progname)
-            .context("deploying the sources")?;
-        deploy_prefix = Some(prefix);
-    } else {
-        deploy_prefix = None;
-    }
-
-    mgr.exec(
-        opt.numproc,
-        config.progname,
-        config.args,
-        config.mpiargs,
-        deploy_prefix,
-    )?;
-
-    if let Some(output) = config.output {
-        mgr.retrieve_output(&output)?;
-    }
-
-    Ok(())*/
 }
