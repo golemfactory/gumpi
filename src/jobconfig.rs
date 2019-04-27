@@ -1,5 +1,5 @@
 use failure::{Fallible, ResultExt};
-use gu_net::NodeId;
+use gu_client::NodeId;
 use serde_derive::{Deserialize, Serialize};
 use std::{
     fs::File,

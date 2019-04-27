@@ -26,18 +26,10 @@ tokio-signal = "0.2.7"
 toml = "0.5.0"
 actix-web = "0.7.19"
 
-[dependencies.gu-model]
-branch = "feature/gu-client-rpc"
-git = "https://github.com/golemfactory/golem-unlimited"
-
 [dependencies.gu-client]
 branch = "feature/gu-client-rpc"
 git = "https://github.com/golemfactory/golem-unlimited"
 
 [dependencies.gu-hardware]
-branch = "feature/gu-client-rpc"
-git = "https://github.com/golemfactory/golem-unlimited"
-
-[dependencies.gu-net]
 branch = "feature/gu-client-rpc"
 git = "https://github.com/golemfactory/golem-unlimited"

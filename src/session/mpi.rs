@@ -10,14 +10,16 @@ use futures::{
     future::{self, Either},
     prelude::*,
 };
-use gu_client::r#async::{Blob, HubConnection, HubSession, PeerSession};
-use gu_hardware::actor::Hardware;
-use gu_model::{
-    envman::{Command, CreateSession, Image, ResourceFormat},
-    peers::PeerInfo,
-    session::HubSessionSpec,
+use gu_client::{
+    model::{
+        envman::{Command, CreateSession, Image, ResourceFormat},
+        peers::PeerInfo,
+        session::HubSessionSpec,
+    },
+    r#async::{Blob, HubConnection, HubSession, PeerSession},
+    NodeId,
 };
-use gu_net::NodeId;
+use gu_hardware::actor::Hardware;
 use log::{info, warn};
 use std::{fs, net::SocketAddr, path::PathBuf};
 
