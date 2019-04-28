@@ -2,6 +2,7 @@
 #![warn(rust_2018_idioms)]
 
 mod async_ctrlc;
+mod error;
 mod failure_ext;
 mod jobconfig;
 mod session;

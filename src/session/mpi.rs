@@ -1,5 +1,6 @@
 //use super::{Command, ProviderSession, ResourceFormat};
 use crate::{
+    error::Error,
     failure_ext::{FutureExt, OptionExt},
     jobconfig::{BuildType, OutputConfig, Sources},
     session::gu_client_ext::PeerHardwareQuery,
@@ -10,6 +11,8 @@ use futures::{
     future::{self, Either},
     prelude::*,
 };
+use gu_client::error::Error as GUError;
+
 use gu_client::{
     model::{
         envman::{Command, CreateSession, Image, ResourceFormat},
@@ -20,7 +23,7 @@ use gu_client::{
     NodeId,
 };
 use gu_hardware::actor::Hardware;
-use log::{info, warn};
+use log::{debug, info, warn};
 use std::{fs, net::SocketAddr, path::PathBuf};
 
 #[derive(Debug)]
@@ -35,8 +38,8 @@ pub struct SessionMPI {
     hub_session: HubSession,
 }
 
-const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image-test.hdi";
-const GUMPI_IMAGE_SHA1: &str = "367c891fb2fc603ab36fae67e8cfe1d1e8c28ff8";
+const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image.hdi";
+const GUMPI_IMAGE_SHA1: &str = "e50575bb61c20b716e89a307264bdb6e5e981919";
 
 impl SessionMPI {
     pub fn init(
@@ -168,8 +171,6 @@ impl SessionMPI {
         mpiargs: Option<Vec<T>>,
         deploy_prefix: Option<String>,
     ) -> impl Future<Item = String, Error = failure::Error> {
-        use gu_client::error::Error as GUError;
-
         let root = self.root_provider();
         let mut cmdline = vec![];
 
@@ -209,11 +210,11 @@ impl SessionMPI {
         root.session
             .update(vec![upload_cmd, exec_cmd])
             .map_err(|e| match e {
-                GUError::ProcessingResult(outs) => {
+                GUError::ProcessingResult(mut outs) => {
                     assert_eq!(outs.len(), 2);
 
                     if outs[0] == "OK" {
-                        format_err!("Execution error:\n{}", outs[1])
+                        Error::ExecutionError(outs.swap_remove(1)).into()
                     } else {
                         format_err!("WriteFile failed: {}", outs[0])
                     }
@@ -256,12 +257,21 @@ impl SessionMPI {
             })
             .and_then(move |blob| {
                 let cmds = generate_deployment_cmds(app_path, blob, progname, sources.mode);
+                debug!("Executing the following build commands: {:#?}", cmds);
                 let build_futs = deployments
                     .into_iter()
                     .map(move |session| {
                         let node = session.node_id();
                         session
                             .update(cmds.clone())
+                            .map_err(|e| -> failure::Error {
+                                match e {
+                                    GUError::ProcessingResult(outs) => {
+                                        Error::CompilationError(outs).into()
+                                    }
+                                    x => x.into(),
+                                }
+                            })
                             .context(format!("compiling the app on node {}", node.to_string()))
                             .and_then(move |logs| Ok(CompilationInfo { logs, node }))
                     })
@@ -385,7 +395,7 @@ fn generate_deployment_cmds(
     };
     let make_cmd = Command::Exec {
         executable: "make".to_owned(),
-        args: vec![],
+        args: vec!["-C".to_owned(), "app".to_owned()],
     };
 
     match mode {
