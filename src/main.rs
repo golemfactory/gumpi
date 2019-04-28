@@ -114,9 +114,16 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                 Either::B(future::ok(None))
             };
 
+            let upload_input = if let Some(input_path) = config.input.clone() {
+                Either::A(session.upload_input(input_path))
+            } else {
+                Either::B(future::ok(()))
+            };
+
             Either::B(
                 deploy_prefix
-                    .and_then(move |deploy_prefix| {
+                    .join(upload_input)
+                    .and_then(move |(deploy_prefix, ())| {
                         session
                             .exec(
                                 cpus_requested,
