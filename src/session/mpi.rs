@@ -84,11 +84,11 @@ impl SessionMPI {
                 let peers_session = hub_session.clone();
 
                 let peers: Vec<_> = peers.collect();
-                info!("peers available: {:?}", peers);
-                let nodes: Vec<_> = peers
+                info!("peers available: {:#?}", peers);
+                let chosen_peers: Vec<_> = peers
                     .iter()
-                    .map(|p| &p.node_id)
-                    .filter(|node_id| {
+                    .filter(|p| {
+                        let node_id = &p.node_id;
                         // If the user wants to filter the providers, do it
                         let remains = prov_filter
                             .as_ref()
@@ -103,27 +103,28 @@ impl SessionMPI {
                     })
                     .cloned()
                     .collect();
+                let nodes: Vec<_> = chosen_peers.iter().map(|p| p.node_id).collect();
 
                 hub_session
                     .add_peers(nodes)
                     .from_err()
-                    .and_then(move |nodes| {
-                        let peer_sessions =
-                            nodes.into_iter().zip(peers).map(move |(node_id, info)| {
-                                info!("Connecting to peer {}", node_id.to_string());
-                                let peer = peers_session.peer(node_id);
-                                let hardware = peer.hardware().context("getting hardware info");
-                                let sess = peer
-                                    .new_session(peer_session_spec.clone())
-                                    .context("creating peer session");
-                                Future::join(sess, hardware).and_then(|(session, hardware)| {
-                                    Ok(ProviderMPI {
-                                        session,
-                                        hardware,
-                                        info,
-                                    })
+                    .and_then(move |_| {
+                        let peer_sessions = chosen_peers.into_iter().map(move |info| {
+                            let node_id = info.node_id;
+                            info!("Connecting to peer {}", node_id.to_string());
+                            let peer = peers_session.peer(node_id);
+                            let hardware = peer.hardware().context("getting hardware info");
+                            let sess = peer
+                                .new_session(peer_session_spec.clone())
+                                .context("creating peer session");
+                            Future::join(sess, hardware).and_then(|(session, hardware)| {
+                                Ok(ProviderMPI {
+                                    session,
+                                    hardware,
+                                    info,
                                 })
-                            });
+                            })
+                        });
                         future::join_all(peer_sessions)
                     })
                     .and_then(|providers| {

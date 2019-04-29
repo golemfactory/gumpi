@@ -86,6 +86,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
             Ok(session)
         })
         .and_then(move |session| {
+            info!("Compiling the sources...");
             let deploy_prefix = if let Some(sources) = config.sources.clone() {
                 Either::A(
                     session
@@ -138,7 +139,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
             // TODO is the manual system stop actually needed??
             // TODO manual cleanup
             // TODO an option to disable cleanup
-            info!("Cleaning up...");
+            // info!("Cleaning up...");
             actix::System::current().stop();
             fut
         })
