@@ -19,7 +19,7 @@ use futures::{
     future::{self, Either},
     prelude::*,
 };
-use log::{debug, info};
+use log::{debug, error, info};
 use std::env;
 use structopt::StructOpt;
 
@@ -70,22 +70,24 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
         .parent()
         .expect("Invalid jobconfig path")
         .to_owned();
+    let noclean = opt.noclean;
 
     SessionMPI::init(opt.hub, prov_filter)
         .context("initializing session")
         .and_then(move |session| {
+            use std::rc::Rc;
+            let session = Rc::new(session);
+            let mut session_clone = Rc::clone(&session);
+
             info!("available cores: {}", session.total_cpus());
             let cpus_available = session.total_cpus();
             if cpus_available < cpus_requested {
-                return Err(format_err!(
+                return Either::A(future::err(format_err!(
                     "Not enough CPUs available: requested: {}, available: {}",
                     cpus_requested,
                     cpus_available
-                ));
+                )));
             }
-            Ok(session)
-        })
-        .and_then(move |session| {
             info!("Compiling the sources...");
             let deploy_prefix = if let Some(sources) = config.sources.clone() {
                 Either::A(
@@ -112,37 +114,51 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                 Either::B(future::ok(None))
             };
 
-            future::ok(session)
-                .join(deploy_prefix)
-                .and_then(move |(session, deploy_prefix)| {
-                    session
-                        .exec(
-                            cpus_requested,
-                            config.progname,
-                            config.args,
-                            config.mpiargs,
-                            deploy_prefix,
-                        )
-                        .join(future::ok(session))
-                })
-        })
-        .and_then(|(output, session)| {
-            println!("Execution output:\n{}", output);
-            if let Some(outs) = output_cfg {
-                Either::A(session.retrieve_output(&outs))
-            } else {
-                Either::B(future::ok(()))
-            }
+            Either::B(
+                deploy_prefix
+                    .and_then(move |deploy_prefix| {
+                        session
+                            .exec(
+                                cpus_requested,
+                                config.progname,
+                                config.args,
+                                config.mpiargs,
+                                deploy_prefix,
+                            )
+                            .context("program execution")
+                            .join(future::ok(session))
+                    })
+                    .and_then(|(output, session)| {
+                        println!("Execution output:\n{}", output);
+                        if let Some(outs) = output_cfg {
+                            Either::A(session.retrieve_output(&outs).context("retrieving output"))
+                        } else {
+                            Either::B(future::ok(()))
+                        }
+                    })
+                    .then(move |fut| {
+                        // At this point, there should be no other session references
+                        // remaining. If it isn't so, we want to stay on the safe side
+                        // and will not attempt to cleanup.
+                        let cleanup = if noclean {
+                            Either::A(future::ok(()))
+                        } else {
+                            match Rc::get_mut(&mut session_clone) {
+                                Some(sess) => Either::B(sess.close().from_err()),
+                                None => Either::A(future::err(format_err!(
+                                    "Hub session refereneces remaining, \
+                                     cannot safely close the session..."
+                                ))),
+                            }
+                        };
+
+                        cleanup
+                            .map_err(|e| error!("Error cleaning up: {}", e))
+                            .then(|_| fut)
+                    }),
+            )
         })
         .handle_ctrlc()
-        .then(|fut| {
-            // TODO is the manual system stop actually needed??
-            // TODO manual cleanup
-            // TODO an option to disable cleanup
-            // info!("Cleaning up...");
-            actix::System::current().stop();
-            fut
-        })
 }
 
 fn run() -> Fallible<()> {

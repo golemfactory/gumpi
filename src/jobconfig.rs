@@ -64,6 +64,8 @@ pub struct Opt {
         help = "explictly select which providers to use, by their node id"
     )]
     pub providers: Vec<NodeId>,
+    #[structopt(long = "noclean")]
+    pub noclean: bool,
 }
 
 #[cfg(test)]
