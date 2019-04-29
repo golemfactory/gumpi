@@ -23,7 +23,7 @@ use gu_client::{
     NodeId,
 };
 use gu_hardware::actor::Hardware;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use std::{fs, net::SocketAddr, path::PathBuf};
 
 #[derive(Debug)]
@@ -135,6 +135,13 @@ impl SessionMPI {
                     })
             },
         ))
+    }
+
+    pub fn close(self) -> impl Future<Item = (), Error = GUError> {
+        self.hub_session.delete().and_then(|()| {
+            info!("Session closed");
+            Ok(())
+        })
     }
 
     fn root_provider(&self) -> &ProviderMPI {
@@ -378,28 +385,34 @@ fn generate_deployment_cmds(
 
     // For the CMake backend we use the EXECUTABLE_OUTPUT_PATH CMake variable
     // For the Make backend we just move the file around
-    let cmake_cmd = Command::Exec {
-        executable: "cmake/bin/cmake".to_owned(),
-        args: vec![
-            app_path.clone(),
-            "-DCMAKE_C_COMPILER=mpicc".to_owned(),
-            "-DCMAKE_CXX_COMPILER=mpicxx".to_owned(),
-            "-DCMAKE_BUILD_TYPE=Release".to_owned(),
-            "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(),
-        ],
-    };
-
-    let mv_cmd = Command::Exec {
-        executable: "mv".to_owned(),
-        args: vec![[app_path, progname].join("/"), "tmp/".to_owned()],
-    };
-    let make_cmd = Command::Exec {
-        executable: "make".to_owned(),
-        args: vec!["-C".to_owned(), "app".to_owned()],
-    };
-
     match mode {
-        BuildType::Make => vec![download_cmd, make_cmd, mv_cmd],
-        BuildType::CMake => vec![download_cmd, cmake_cmd, make_cmd],
+        BuildType::Make => {
+            let mv_cmd = Command::Exec {
+                executable: "mv".to_owned(),
+                args: vec![[app_path, progname].join("/"), "tmp/".to_owned()],
+            };
+            let make_cmd = Command::Exec {
+                executable: "make".to_owned(),
+                args: vec!["-C".to_owned(), "app".to_owned()],
+            };
+            vec![download_cmd, make_cmd, mv_cmd]
+        }
+        BuildType::CMake => {
+            let cmake_cmd = Command::Exec {
+                executable: "cmake/bin/cmake".to_owned(),
+                args: vec![
+                    app_path.clone(),
+                    "-DCMAKE_C_COMPILER=mpicc".to_owned(),
+                    "-DCMAKE_CXX_COMPILER=mpicxx".to_owned(),
+                    "-DCMAKE_BUILD_TYPE=Release".to_owned(),
+                    "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(),
+                ],
+            };
+            let make_cmd = Command::Exec {
+                executable: "make".to_owned(),
+                args: vec![],
+            };
+            vec![download_cmd, cmake_cmd, make_cmd]
+        }
     }
 }
