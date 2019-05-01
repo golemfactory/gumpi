@@ -12,10 +12,8 @@ args = ["2", "1", "12000", "10"]
 [output]
 # the path to the directory on the PROVIDER node containing the relevant output,
 # relatively to the application working directory
-#
-# since game-life doesn't produce any meaningful output, we just send over
-# the application sources for demonstrative purposes
-source = "app"
+source = "output"
+
 # desired path to the file containing the outputs from the provider,
 # relative to the program working directory
 # this file will be created on the CLIENT computer
