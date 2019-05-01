@@ -5,10 +5,25 @@ args = ["2", "2", "1200", "10"]
 # (optional) extra arguments that should be passed to mpirun
 #mpiargs = ["--mca", "btl_tcp_if_include", "10.30.8.0/22"]
 
-# (optional) configuration of the sources to be built on the provider machine
+# (optional) the description of the application output
+#
+# Use this section to configure the application artifacts that should be
+# sent back to your computer.
+[output]
+# the path to the directory on the PROVIDER node containing the relevant output,
+# relatively to the application working directory
+source = "output"
+
+# desired path to the file containing the outputs from the provider,
+# relative to the program working directory
+# this file will be created on the CLIENT computer
+target = "game-life-outs.tar"
+
+# (optional) configuration of the application sources
+# if present, gumpi will use the given tarball to build the application
 # if missing, gumpi will assume that the binary is already present on the machine
 [sources]
-# path to the tarball containing the sources
+# path to the tarball containing the sources, relative to the configuration file
 path = "game-life.tar"
 # build system. Supported: "Make" or "CMake"
 mode = "CMake"

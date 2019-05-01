@@ -1,4 +1,5 @@
 use failure::{Fallible, ResultExt};
+use gu_client::NodeId;
 use serde_derive::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -8,16 +9,22 @@ use std::{
 };
 use structopt::StructOpt;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum BuildType {
     Make,
     CMake,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Sources {
     pub path: PathBuf,
     pub mode: BuildType,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OutputConfig {
+    pub source: PathBuf,
+    pub target: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,6 +33,8 @@ pub struct JobConfig {
     pub args: Vec<String>,
     pub mpiargs: Option<Vec<String>>,
     pub sources: Option<Sources>,
+    pub output: Option<OutputConfig>,
+    pub input: Option<PathBuf>,
 }
 
 impl JobConfig {
@@ -46,11 +55,18 @@ impl JobConfig {
 #[structopt(name = "gumpi", about = "MPI on Golem Unlimited")]
 pub struct Opt {
     #[structopt(short = "n", long = "numproc")]
-    pub numproc: u32,
+    pub numproc: usize,
     #[structopt(short = "h", long = "hub")]
     pub hub: SocketAddr,
     #[structopt(short = "j", long = "job")]
     pub jobconfig: PathBuf,
+    #[structopt(
+        long = "providers",
+        help = "explictly select which providers to use, by their node id"
+    )]
+    pub providers: Vec<NodeId>,
+    #[structopt(long = "noclean")]
+    pub noclean: bool,
 }
 
 #[cfg(test)]
