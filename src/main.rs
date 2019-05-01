@@ -62,7 +62,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
     };
     let output_cfg = config.output.clone();
 
-    // It's safe to call unwrap here - at this point opt.jobconfig
+    // It's safe to call expect here - at this point opt.jobconfig
     // is guaranteed to be a valid filepath, which is checked by
     // JobConfig::from_file in main.rs
     let sources_dir = opt
@@ -140,6 +140,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                         // At this point, there should be no other session references
                         // remaining. If it isn't so, we want to stay on the safe side
                         // and will not attempt to cleanup.
+                        info!("Cleaning up");
                         let cleanup = if noclean {
                             Either::A(future::ok(()))
                         } else {

@@ -29,8 +29,10 @@ args = ["-a"]
 
 See [examples/Tutorial.md](examples/Tutorial.md) for a more details.
 
-# Known issues
-If you want to run the application over LAN, you may need to specify your IP address space, e.g. the previous example will become:
+# Known issues and limitations
+## Connectivity
+If you want to run the application over LAN, you may need to specify your IP address space, e.g.
+the previous example will become:
 
 ```
 progname = "uname"
@@ -38,7 +40,14 @@ args = ["-a"]
 mpiargs = ["--mca", "btl_tcp_if_include", "10.30.8.0/22"]
 ```
 
-Currently gumpi limits the accepted size of the stdout and the returned output to 1GiB. Should this be a problem for your application, please report an issue.
+## Output size
+Currently gumpi limits the accepted size of the stdout and the returned output to 1GiB.
+Should this be a problem for your application, please report an issue.
+
+## Output location
+Currently gumpi requires the application to put all the relevant artifacts into a single subdirectory.
+In particular, fetching files directly from the working directory is NOT supported.
+
 # Debugging
-gumpi cleanly closes the sessions by default, but this behavior may significantly complicate the debugging.
-To disable this behavior, pass the `--features "noclean_session"` parameter to cargo.
+You can use the `--noclean` runtime option to disable the automatic cleanup of the sessions on the client side.
+Note that in the future Golem Unlimited may automatically remove stale sessions on the provider side.

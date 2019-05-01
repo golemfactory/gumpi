@@ -3,6 +3,9 @@ use futures::prelude::*;
 use gu_client::r#async::{Peer, ProviderRef};
 use gu_hardware::actor::{Hardware, HardwareQuery};
 
+/// Query hardware of a peer
+///
+/// Hardware query is not an official part of the GU API, so we make use of RPC.
 pub trait PeerHardwareQuery {
     fn hardware(&self) -> Box<dyn Future<Item = Hardware, Error = failure::Error>>;
 }
