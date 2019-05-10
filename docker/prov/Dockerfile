@@ -11,7 +11,9 @@ ENV HOME=/home/${USER}
 
 RUN apt-get update -y && apt-get -y upgrade && apt-get install -y software-properties-common && \
     add-apt-repository -y ppa:marmistrz/openmpi && \
-    apt-get install -y curl cmake git autoconf build-essential gcc gfortran libopenmpi-dev openmpi-bin openmpi-common htop && \
+    apt-get install -y curl cmake git autoconf build-essential gcc-8 g++-8 gfortran-8 libopenmpi-dev openmpi-bin openmpi-common htop && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 60 --slave /usr/bin/g++ g++ /usr/bin/g++-8 && \
+    update-alternatives --config gcc && \
     curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     apt-get clean && apt-get purge && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

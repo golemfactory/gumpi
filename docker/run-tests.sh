@@ -11,7 +11,7 @@ check_cmd jq
 cleanup() {
 	docker-compose down
 }
-trap cleanup EXIT
+#trap cleanup EXIT
 
 set -x
 set -e
@@ -31,5 +31,7 @@ docker-compose exec hub gu-hub peer list
 docker-compose exec hub gumpi -h "$HUB_ADDR" -j /examples/game-life.toml -n 4
 
 # Check the correctness of the output
-docker-compose exec hub tar -xvf game-life-output.tar
+docker-compose exec hub tar -xvf game-life-outs.tar
 docker-compose exec hub cmp game-life-output.txt /examples/correct-output.txt
+
+echo "TEST PASSED"
