@@ -24,7 +24,7 @@ use std::env;
 use structopt::StructOpt;
 
 fn show_error(e: &failure::Error) {
-    match e.downcast_ref::<CtrlcEvent>() {
+    match e.find_root_cause().downcast_ref::<CtrlcEvent>() {
         Some(_) => eprintln!("Exection interrupted..."),
         None => {
             eprint!("Error");
@@ -73,6 +73,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
     let noclean = opt.noclean;
 
     SessionMPI::init(opt.hub, prov_filter)
+        .handle_ctrlc()
         .context("initializing session")
         .and_then(move |session| {
             use std::rc::Rc;
@@ -136,6 +137,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                             Either::B(future::ok(()))
                         }
                     })
+                    .handle_ctrlc()
                     .then(move |fut| {
                         // At this point, there should be no other session references
                         // remaining. If it isn't so, we want to stay on the safe side
@@ -159,7 +161,6 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                     }),
             )
         })
-        .handle_ctrlc()
 }
 
 fn run() -> Fallible<()> {
