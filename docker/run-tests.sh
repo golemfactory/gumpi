@@ -1,4 +1,7 @@
 #!/bin/sh
+# This script needs to use docker-compose exec -T, because docker-compose on
+# our Jenkins is too old and it suffers from this bug:
+# https://github.com/docker/compose/issues/4290
 
 check_cmd() {
 	if ! command -v "$1" >/dev/null; then
@@ -25,21 +28,21 @@ fi
 docker-compose build
 docker-compose up -d
 
-HUB_ADDR=$(docker-compose exec hub gu-hub --json lan list -I hub | grep -v INFO | jq -r '.[0].Addresses')
+HUB_ADDR=$(docker-compose exec -T hub gu-hub --json lan list -I hub | grep -v INFO | jq -r '.[0].Addresses')
 
 for idx in $(seq 1 4); do
-	docker-compose exec --index="$idx" prov gu-provider hubs connect "$HUB_ADDR"
+	docker-compose exec -T --index="$idx" prov gu-provider hubs connect "$HUB_ADDR"
 done
 
 # The providers need a while to connect to the hub, give them that while.
 sleep 2
 
-docker-compose exec hub gu-hub peer list
+docker-compose exec -T hub gu-hub peer list
 
-docker-compose exec hub gumpi -h "$HUB_ADDR" -j /examples/game-life.toml -n 4
+docker-compose exec -T hub gumpi -h "$HUB_ADDR" -j /examples/game-life.toml -n 4
 
 # Check the correctness of the output
-docker-compose exec hub tar -xvf game-life-outs.tar
-docker-compose exec hub cmp game-life-output.txt /examples/correct-output.txt
+docker-compose exec -T hub tar -xvf game-life-outs.tar
+docker-compose exec -T hub cmp game-life-output.txt /examples/correct-output.txt
 
 echo "TEST PASSED"
