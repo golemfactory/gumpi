@@ -18,6 +18,7 @@ set -e
 
 PRIVKEY_PATH=prov/ssh/mpi
 if [ ! -f $PRIVKEY_PATH ]; then
+	mkdir -p "$(dirname $PRIVKEY_PATH)"
 	ssh-keygen -f $PRIVKEY_PATH -N ""
 fi
 docker-compose up -d
