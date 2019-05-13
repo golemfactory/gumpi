@@ -21,6 +21,8 @@ if [ ! -f $PRIVKEY_PATH ]; then
 	mkdir -p "$(dirname $PRIVKEY_PATH)"
 	ssh-keygen -f $PRIVKEY_PATH -N ""
 fi
+
+docker-compose build
 docker-compose up -d
 
 HUB_ADDR=$(docker-compose exec hub gu-hub --json lan list -I hub | grep -v INFO | jq -r '.[0].Addresses')
