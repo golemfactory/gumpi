@@ -1,7 +1,22 @@
 #!/bin/sh
 # This script needs to use docker-compose exec -T, because docker-compose on
-# our Jenkins is too old and it suffers from this bug:
+# Ubuntu 18.04 is too old and it suffers from this bug:
 # https://github.com/docker/compose/issues/4290
+#
+# If the relevant golem-unlimited branch has changed since
+# last build, it's needed to use the `--no-clean` option.
+
+DOCKER_BUILD_ARGS=""
+for var in "$@"; do
+	case "$var" in
+		"-h"|"--help")
+			echo "Usage: $0 [--no-cache]"
+			;;
+		"--no-cache")
+			DOCKER_BUILD_ARGS="--no-cache"
+			;;
+	esac
+done
 
 check_cmd() {
 	if ! command -v "$1" >/dev/null; then
@@ -25,7 +40,7 @@ if [ ! -f $PRIVKEY_PATH ]; then
 	ssh-keygen -f $PRIVKEY_PATH -N ""
 fi
 
-docker-compose build
+docker-compose build "$DOCKER_BUILD_ARGS"
 docker-compose up -d
 
 HUB_ADDR=$(docker-compose exec -T hub gu-hub --json lan list -I hub | grep -v INFO | jq -r '.[0].Addresses')
