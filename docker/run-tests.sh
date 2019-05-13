@@ -11,7 +11,7 @@ check_cmd jq
 cleanup() {
 	docker-compose down
 }
-#trap cleanup EXIT
+trap cleanup EXIT
 
 set -x
 set -e
