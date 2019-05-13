@@ -40,7 +40,7 @@ if [ ! -f $PRIVKEY_PATH ]; then
 	ssh-keygen -f $PRIVKEY_PATH -N ""
 fi
 
-docker-compose build "$DOCKER_BUILD_ARGS"
+docker-compose build $DOCKER_BUILD_ARGS
 docker-compose up -d
 
 HUB_ADDR=$(docker-compose exec -T hub gu-hub --json lan list -I hub | grep -v INFO | jq -r '.[0].Addresses')
