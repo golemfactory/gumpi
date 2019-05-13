@@ -15,6 +15,11 @@ cleanup() {
 
 set -x
 set -e
+
+PRIVKEY_PATH=prov/ssh/mpi
+if [ ! -f $PRIVKEY_PATH ]; then
+	ssh-keygen -f $PRIVKEY_PATH -N ""
+fi
 docker-compose up -d
 
 HUB_ADDR=$(docker-compose exec hub gu-hub --json lan list -I hub | grep -v INFO | jq -r '.[0].Addresses')
