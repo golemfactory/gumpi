@@ -25,7 +25,7 @@ use structopt::StructOpt;
 
 fn show_error(e: &failure::Error) {
     match e.find_root_cause().downcast_ref::<CtrlcEvent>() {
-        Some(_) => eprintln!("Exection interrupted..."),
+        Some(_) => eprintln!("Execution interrupted..."),
         None => {
             eprint!("Error");
             for cause in e.iter_chain() {

@@ -23,7 +23,7 @@ pub struct Sources {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutputConfig {
-    pub source: PathBuf,
+    pub source: PathBuf, 
     pub target: PathBuf,
 }
 
