@@ -26,7 +26,11 @@ check_cmd() {
 }
 check_cmd jq
 
+TEST_OK=false
 cleanup() {
+	if [ "$TEST_OK" != "true" ]; then
+		docker-compose logs
+	fi
 	docker-compose down
 }
 trap cleanup EXIT
@@ -60,4 +64,5 @@ docker-compose exec -T hub gumpi -h "$HUB_ADDR" -j /examples/game-life.toml -n 4
 docker-compose exec -T hub tar -xvf game-life-outs.tar
 docker-compose exec -T hub cmp game-life-output.txt /examples/correct-output.txt
 
+TEST_OK=true
 echo "TEST PASSED"
