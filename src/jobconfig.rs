@@ -1,5 +1,5 @@
 use failure::{Fallible, ResultExt};
-use gu_net::NodeId;
+use gu_client::NodeId;
 use serde_derive::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -9,19 +9,19 @@ use std::{
 };
 use structopt::StructOpt;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum BuildType {
     Make,
     CMake,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Sources {
     pub path: PathBuf,
     pub mode: BuildType,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutputConfig {
     pub source: PathBuf,
     pub target: PathBuf,
@@ -34,6 +34,7 @@ pub struct JobConfig {
     pub mpiargs: Option<Vec<String>>,
     pub sources: Option<Sources>,
     pub output: Option<OutputConfig>,
+    pub input: Option<PathBuf>,
 }
 
 impl JobConfig {
@@ -64,6 +65,8 @@ pub struct Opt {
         help = "explictly select which providers to use, by their node id"
     )]
     pub providers: Vec<NodeId>,
+    #[structopt(long = "noclean")]
+    pub noclean: bool,
 }
 
 #[cfg(test)]
