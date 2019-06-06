@@ -149,7 +149,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                             match Rc::get_mut(&mut session_clone) {
                                 Some(sess) => Either::B(sess.close().from_err()),
                                 None => Either::A(future::err(format_err!(
-                                    "Hub session refereneces remaining, \
+                                    "Hub session references remaining, \
                                      cannot safely close the session..."
                                 ))),
                             }
