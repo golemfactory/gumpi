@@ -1,30 +1,52 @@
-use super::{Command, HubSession, ProviderSession, ResourceFormat};
+//use super::{Command, ProviderSession, ResourceFormat};
 use crate::{
-    actix::wait_ctrlc,
-    failure_ext::OptionExt,
+    error::Error,
+    failure_ext::{FutureExt, OptionExt},
     jobconfig::{BuildType, OutputConfig, Sources},
+    session::gu_client_ext::PeerHardwareQuery,
 };
 use actix_web::{client, HttpMessage};
-use failure::{format_err, Fallible, ResultExt};
+use failure::{format_err, ResultExt};
 use futures::{
     future::{self, Either},
     prelude::*,
 };
-use gu_net::NodeId;
-use log::{info, warn};
-use std::{fs, net::SocketAddr, path::Path, rc::Rc};
+use gu_client::error::Error as GUError;
+
+use gu_client::{
+    model::{
+        envman::{Command, CreateSession, Image, ResourceFormat},
+        peers::PeerInfo,
+        session::HubSessionSpec,
+    },
+    r#async::{Blob, HubConnection, HubSession, PeerSession},
+    NodeId,
+};
+use gu_hardware::actor::Hardware;
+use log::{debug, info, warn};
+use std::{fs, net::SocketAddr, path::PathBuf};
+
+#[derive(Debug)]
+pub struct ProviderMPI {
+    session: PeerSession,
+    hardware: Hardware,
+    info: PeerInfo,
+}
 
 pub struct SessionMPI {
-    provider_sessions: Vec<ProviderSession>,
-    hub_session: Rc<HubSession>,
+    providers: Vec<ProviderMPI>,
+    hub_session: HubSession,
 }
+
+const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image.hdi";
+const GUMPI_IMAGE_SHA1: &str = "e50575bb61c20b716e89a307264bdb6e5e981919";
 
 impl SessionMPI {
     pub fn init(
         hub_ip: SocketAddr,
-        cpus_requested: usize,
-        providers_filter: Option<Vec<NodeId>>,
-    ) -> Fallible<Self> {
+        prov_filter: Option<Vec<NodeId>>,
+    ) -> impl Future<Item = SessionMPI, Error = failure::Error> {
+        println!("initializing gumpi");
         if hub_ip.ip().is_loopback() {
             warn!(
                 "The hub address {} is a loopback address. \
@@ -34,77 +56,118 @@ impl SessionMPI {
             );
         }
 
-        let hub_session = HubSession::new(hub_ip)?;
-        let hub_session = Rc::new(hub_session);
+        let hub_conn = HubConnection::from_addr(hub_ip.to_string()).context("invalid hub address");
+        let hub_conn = match hub_conn {
+            Err(e) => return Either::A(future::err(e.into())),
+            Ok(conn) => conn,
+        };
 
-        let providers = hub_session.get_providers()?;
-        let provider_sessions: Vec<ProviderSession> = providers
-            .into_iter()
-            .filter_map(|p| {
-                if let Some(filter) = &providers_filter {
-                    if !filter.contains(&p.node_id) {
-                        info!("Ignoring provider: {}", p.node_id.to_string());
-                        return None;
-                    }
-                }
-                info!("Connecting to provider: {}", p.node_id.to_string());
-                let sess = ProviderSession::new(Rc::clone(&hub_session), p);
-                match sess {
-                    Err(e) => {
-                        warn!("Error initalizing provider session: {}", e);
-                        None
-                    }
-                    Ok(r) => {
-                        info!("Connected to provider: {:#?}", r);
-                        Some(r)
-                    }
-                }
-            })
-            .collect();
+        let hub_session = hub_conn.new_session(HubSessionSpec::default());
+        let peers = hub_conn.list_peers();
 
-        if provider_sessions.is_empty() {
-            return Err(format_err!("No providers available"));
-        }
+        let peer_session_spec = CreateSession {
+            env_type: "hd".to_owned(),
+            image: Image {
+                url: GUMPI_IMAGE_URL.to_owned(),
+                hash: format!("SHA1:{}", GUMPI_IMAGE_SHA1),
+            },
+            name: "gumpi".to_owned(),
+            tags: vec![],
+            note: None,
+            options: (),
+        };
 
-        let cpus_available: usize = provider_sessions
-            .iter()
-            .map(|peer| peer.hardware.num_cores)
-            .sum();
-        if cpus_available < cpus_requested {
-            return Err(format_err!(
-                "Not enough CPUs available: requested: {}, available: {}",
-                cpus_requested,
-                cpus_available
-            ));
-        }
+        Either::B(hub_session.join(peers).context("adding peers").and_then(
+            move |(session, peers)| {
+                let hub_session = session.into_inner().unwrap();
+                let peers_session = hub_session.clone();
 
-        info!("Initialized GUMPI.");
+                let peers: Vec<_> = peers.collect();
+                info!("peers available: {:#?}", peers);
+                let chosen_peers: Vec<_> = peers
+                    .iter()
+                    .filter(|p| {
+                        let node_id = &p.node_id;
+                        // If the user wants to filter the providers, do it
+                        let remains = prov_filter
+                            .as_ref()
+                            .map(|provs| provs.contains(node_id))
+                            .unwrap_or(true);
 
-        Ok(Self {
-            hub_session,
-            provider_sessions,
+                        if !remains {
+                            info!("Ignoring provider: {}", node_id.to_string());
+                        };
+
+                        remains
+                    })
+                    .cloned()
+                    .collect();
+                let nodes: Vec<_> = chosen_peers.iter().map(|p| p.node_id).collect();
+
+                hub_session
+                    .add_peers(nodes)
+                    .from_err()
+                    .and_then(move |_| {
+                        let peer_sessions = chosen_peers.into_iter().map(move |info| {
+                            let node_id = info.node_id;
+                            info!("Connecting to peer {}", node_id.to_string());
+                            let peer = peers_session.peer(node_id);
+                            let hardware = peer.hardware().context("getting hardware info");
+                            let sess = peer
+                                .new_session(peer_session_spec.clone())
+                                .context("creating peer session");
+                            Future::join(sess, hardware).and_then(|(session, hardware)| {
+                                Ok(ProviderMPI {
+                                    session,
+                                    hardware,
+                                    info,
+                                })
+                            })
+                        });
+                        future::join_all(peer_sessions)
+                    })
+                    .and_then(|providers| {
+                        info!("Initialized gumpi");
+                        Ok(Self {
+                            hub_session,
+                            providers,
+                        })
+                    })
+            },
+        ))
+    }
+
+    pub fn close(&self) -> impl Future<Item = (), Error = GUError> {
+        self.hub_session.clone().delete().and_then(|()| {
+            info!("Session closed");
+            Ok(())
         })
     }
 
-    fn root_provider(&self) -> &ProviderSession {
-        &self.provider_sessions[0]
+    fn root_provider(&self) -> &ProviderMPI {
+        self.providers.first().expect("no providers")
     }
 
-    pub fn hostfile(&self) -> Fallible<String> {
-        let peers = &self.provider_sessions;
+    pub fn hostfile(&self) -> String {
+        let peers = &self.providers;
         let file_lines: Vec<_> = peers
             .iter()
             .map(|peer| {
-                let ip_sock = &peer.peerinfo.peer_addr;
+                let ip_sock = &peer.info.peer_addr;
                 let ip_sock: SocketAddr = ip_sock
                     .parse()
                     .unwrap_or_else(|_| panic!("GU returned an invalid IP address, {}", ip_sock));
                 let ip = ip_sock.ip();
+                let cpus = peer.hardware.num_cores();
 
-                format!("{} port=4222 slots={}", ip, peer.hardware.num_cores)
+                format!("{} port=4222 slots={}", ip, cpus)
             })
             .collect();
-        Ok(file_lines.join("\n"))
+        file_lines.join("\n")
+    }
+
+    pub fn total_cpus(&self) -> usize {
+        self.providers.iter().map(|p| p.hardware.num_cores()).sum()
     }
 
     pub fn exec<T: Into<String>>(
@@ -114,7 +177,7 @@ impl SessionMPI {
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,
         deploy_prefix: Option<String>,
-    ) -> Fallible<()> {
+    ) -> impl Future<Item = String, Error = failure::Error> {
         let root = self.root_provider();
         let mut cmdline = vec![];
 
@@ -136,57 +199,211 @@ impl SessionMPI {
         ]);
         cmdline.extend(args.into_iter().map(T::into));
 
-        let hostfile = self.hostfile()?;
+        let hostfile = self.hostfile();
         info!("HOSTFILE:\n{}", hostfile);
-        let blob_id = self.hub_session.upload(hostfile)?;
-        info!("Downloading the hostfile...");
-        let download_output = root.download(blob_id, "hostfile".to_owned(), ResourceFormat::Raw);
-        info!("Downloaded: {:?}", download_output);
+
+        let upload_cmd = Command::WriteFile {
+            content: hostfile,
+            file_path: "hostfile".to_owned(),
+        };
 
         info!("Executing mpirun with args {:?}...", cmdline);
+
         let exec_cmd = Command::Exec {
             executable: "mpirun".to_owned(),
             args: cmdline,
         };
 
-        let ret = root.exec_commands(vec![exec_cmd])?;
-        println!("Output:");
-        for out in ret {
-            println!("{}\n========================", out);
-        }
-        Ok(())
+        root.session
+            .update(vec![upload_cmd, exec_cmd])
+            .map_err(|e| match e {
+                GUError::ProcessingResult(mut outs) => {
+                    assert_eq!(outs.len(), 2);
+
+                    if outs[0] == "OK" {
+                        Error::ExecutionError(outs.swap_remove(1)).into()
+                    } else {
+                        format_err!("WriteFile failed: {}", outs[0])
+                    }
+                }
+                x => x.into(),
+            })
+            .and_then(|mut outs| {
+                // outs should be a vector of length 2, of form ["OK", execution_output]
+                // only the latter is interesting to us
+                Ok(outs.swap_remove(1))
+            })
     }
 
-    // Returns: the deployment prefix
+    /// Returns: the deployment prefix
+    ///
+    /// The resulting executable may not reside in the root of the GU image.
+    /// The deployment prefix describes the folder where the application has
+    /// been deployed. With the current golem-unlimited design, this is
+    /// relative to the image root.
+    ///
+    /// See the comments in generate_deployment_cmds for more details.
     pub fn deploy(
         &self,
-        config_path: &Path,
-        sources: &Sources,
-        progname: &str,
-    ) -> Fallible<String> {
+        config_path: PathBuf,
+        sources: Sources,
+        progname: String,
+    ) -> impl Future<Item = DeploymentInfo, Error = failure::Error> {
         let app_path = "app".to_owned();
         let tarball_path = config_path.join(&sources.path);
 
-        let blob_id = self
-            .hub_session
-            .upload_file(&tarball_path)
-            .context("uploading file")?;
+        let tarball = fs::read(tarball_path).map(Into::into);
+        let tarball_stream = futures::stream::once(tarball);
 
-        for provider in &self.provider_sessions {
-            provider
-                .download(blob_id, app_path.clone(), ResourceFormat::Tar)
-                .context("downloading file")?;
+        let deployments: Vec<_> = self
+            .providers
+            .iter()
+            .map(|provider| provider.session.clone())
+            .collect();
 
-            // If we create a ProviderSession per provider, every session
-            // gets a unique identifier. This means that the resulting executable
-            // resides in a different directory on each of the provider nodes,
-            // which causes mpirun to fail.
-            // As a workaround, we provide a symlink to the /tmp directory
-            // in the image and put the resulting binary there.
+        self.hub_session
+            .new_blob()
+            .from_err()
+            .and_then(move |blob| {
+                blob.upload_from_stream(tarball_stream)
+                    .from_err()
+                    .and_then(move |_| Ok(blob))
+            })
+            .and_then(move |blob| {
+                let cmds = generate_deployment_cmds(app_path, blob, progname, sources.mode);
+                debug!("Executing the following build commands: {:#?}", cmds);
+                let build_futs = deployments
+                    .into_iter()
+                    .map(move |session| {
+                        let node = session.node_id();
+                        session
+                            .update(cmds.clone())
+                            .map_err(|e| -> failure::Error {
+                                match e {
+                                    GUError::ProcessingResult(outs) => {
+                                        Error::CompilationError(outs).into()
+                                    }
+                                    x => x.into(),
+                                }
+                            })
+                            .context(format!("compiling the app on node {}", node.to_string()))
+                            .and_then(move |logs| Ok(CompilationInfo { logs, node }))
+                    })
+                    .collect::<Vec<_>>();
 
-            // For the CMake backend we use the EXECUTABLE_OUTPUT_PATH CMake variable
-            // For the Make backend we just move the file around
+                future::join_all(build_futs).and_then(|logs| {
+                    Ok(DeploymentInfo {
+                        logs,
+                        deploy_prefix: "/tmp/".to_owned(),
+                    })
+                })
+            })
+    }
 
+    pub fn retrieve_output(
+        &self,
+        output_cfg: &OutputConfig,
+    ) -> impl Future<Item = (), Error = failure::Error> {
+        let path = output_cfg
+            .source
+            .to_str()
+            .ok_or_context("output_path is not valid unicode")
+            .map(str::to_owned)
+            .into_future()
+            .map_err(failure::Error::from);
+        let output_file = output_cfg.target.clone();
+        let blob = self.hub_session.new_blob().from_err();
+        let root_session = self.root_provider().session.clone();
+
+        blob.join(path)
+            .and_then(move |(blob, path)| {
+                info!("Uploading the outputs from the provider to the hub");
+                let cmd = Command::UploadFile {
+                    file_path: path,
+                    format: ResourceFormat::Tar,
+                    uri: blob.uri(),
+                };
+                root_session
+                    .update(vec![cmd])
+                    .context("uploading the outputs from the provider to the hub")
+                    .and_then(|_| future::ok(blob))
+            })
+            .and_then(|blob| {
+                info!("Downloading the outputs from the hub");
+                client::ClientRequest::get(blob.uri())
+                    .finish()
+                    .unwrap()
+                    .send()
+                    .context("Downloading the outputs from the hub")
+                    .and_then(|response| {
+                        let status = response.status();
+                        if status.is_success() {
+                            Either::A(response.body().limit(1024 * 1024 * 1024).from_err()) // 1 GiB limit
+                        } else {
+                            let err = format_err!("Error downloading the outputs: {}", status);
+                            Either::B(future::err(err))
+                        }
+                    })
+            })
+            .and_then(|body| {
+                info!(
+                    "Writing the application outputs to {}",
+                    output_file.to_string_lossy()
+                );
+                fs::write(output_file, body)
+                    .context("Writing the outputs")
+                    .map_err(Into::into)
+            })
+    }
+}
+
+pub struct DeploymentInfo {
+    pub logs: Vec<CompilationInfo>,
+    pub deploy_prefix: String,
+}
+
+#[derive(Debug)]
+pub struct CompilationInfo {
+    pub node: NodeId,
+    pub logs: Vec<String>,
+}
+
+/// app_path: the directory where the app sources should reside
+///             on the provider side
+fn generate_deployment_cmds(
+    app_path: String,
+    blob: Blob,
+    progname: String,
+    mode: BuildType,
+) -> Vec<Command> {
+    let download_cmd = Command::DownloadFile {
+        format: ResourceFormat::Tar,
+        uri: blob.uri(),
+        file_path: app_path.clone(),
+    };
+
+    // If we create a session per provider, every session
+    // gets a unique identifier. This means that the resulting executable
+    // resides in a different directory on each of the provider nodes,
+    // which causes mpirun to fail.
+    // As a workaround, we provide a symlink to the /tmp directory
+    // in the image and put the resulting binary there.
+
+    // For the CMake backend we use the EXECUTABLE_OUTPUT_PATH CMake variable
+    // For the Make backend we just move the file around
+    match mode {
+        BuildType::Make => {
+            let mv_cmd = Command::Exec {
+                executable: "mv".to_owned(),
+                args: vec![[app_path, progname].join("/"), "tmp/".to_owned()],
+            };
+            let make_cmd = Command::Exec {
+                executable: "make".to_owned(),
+                args: vec!["-C".to_owned(), "app".to_owned()],
+            };
+            vec![download_cmd, make_cmd, mv_cmd]
+        }
+        BuildType::CMake => {
             let cmake_cmd = Command::Exec {
                 executable: "cmake/bin/cmake".to_owned(),
                 args: vec![
@@ -194,69 +411,14 @@ impl SessionMPI {
                     "-DCMAKE_C_COMPILER=mpicc".to_owned(),
                     "-DCMAKE_CXX_COMPILER=mpicxx".to_owned(),
                     "-DCMAKE_BUILD_TYPE=Release".to_owned(),
-                    "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(), // TODO fix path for Make
+                    "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(),
                 ],
-            };
-            let mv_cmd = Command::Exec {
-                executable: "mv".to_owned(),
-                args: vec![[&app_path, progname].join("/"), "tmp/".to_owned()],
             };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
                 args: vec![],
             };
-
-            let cmds = match &sources.mode {
-                BuildType::Make => vec![make_cmd, mv_cmd],
-                BuildType::CMake => vec![cmake_cmd, make_cmd],
-            };
-
-            let out = provider
-                .exec_commands(cmds)
-                .context(format!("compiling the app on node {}", provider.name()))?;
-            for out in out {
-                info!("Provider {} compilation output:\n{}", provider.name(), out);
-            }
+            vec![download_cmd, cmake_cmd, make_cmd]
         }
-        Ok("/tmp/".to_owned())
-    }
-
-    pub fn retrieve_output(&self, output_cfg: &OutputConfig) -> Fallible<()> {
-        // upload the file from the provider onto the hub
-        info!("Uploading the job output onto the hub");
-        let (url, _) = self.hub_session.create_blob()?;
-        let path = output_cfg
-            .source
-            .to_str()
-            .ok_or_context("output_path is not valid unicode")?
-            .to_owned();
-        let out_log = self
-            .root_provider()
-            .upload(url.clone(), path, ResourceFormat::Tar)?;
-        info!("File uploaded: {}", out_log);
-
-        info!("Downloading the outputs from the hub");
-        let future = client::ClientRequest::get(url)
-            .finish()
-            .unwrap()
-            .send()
-            .from_err()
-            .and_then(|response| {
-                let status = response.status();
-                if status.is_success() {
-                    Either::A(response.body().limit(1024 * 1024 * 1024).from_err()) // 1 GiB limit
-                } else {
-                    let err = format_err!("Error downloading the outputs: {}", status);
-                    Either::B(future::err(err))
-                }
-            });
-        let output = wait_ctrlc(future).context("Downloading the file")?;
-
-        info!("Writing the outputs...");
-        let output_file = &output_cfg.target;
-        fs::write(output_file, output).context("Writing the outputs")?;
-        info!("Outputs written to {}", output_file.to_string_lossy());
-
-        Ok(())
     }
 }
