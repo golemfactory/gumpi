@@ -235,7 +235,14 @@ impl SessionMPI {
             })
     }
 
-    // Returns: the deployment prefix
+    /// Returns: the deployment prefix
+    ///
+    /// The resulting executable may not reside in the root of the GU image.
+    /// The deployment prefix describes the folder where the application has
+    /// been deployed. With the current golem-unlimited design, this is
+    /// relative to the image root.
+    ///
+    /// See the comments in generate_deployment_cmds for more details.
     pub fn deploy(
         &self,
         config_path: PathBuf,

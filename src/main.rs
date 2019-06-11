@@ -90,6 +90,9 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                 )));
             }
             info!("Compiling the sources...");
+            // deploy_prefix is the location of the folder, where the executable
+            // resides. See the documentation for SessionMPI::deploy for more
+            // details
             let deploy_prefix = if let Some(sources) = config.sources.clone() {
                 Either::A(
                     session
