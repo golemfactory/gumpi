@@ -24,7 +24,11 @@ use gu_client::{
 };
 use gu_hardware::actor::Hardware;
 use log::{debug, info, warn};
-use std::{fs, net::SocketAddr, path::PathBuf};
+use std::{
+    fs,
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug)]
 pub struct ProviderMPI {
@@ -252,23 +256,14 @@ impl SessionMPI {
         let app_path = "app".to_owned();
         let tarball_path = config_path.join(&sources.path);
 
-        let tarball = fs::read(tarball_path).map(Into::into);
-        let tarball_stream = futures::stream::once(tarball);
-
         let deployments: Vec<_> = self
             .providers
             .iter()
             .map(|provider| provider.session.clone())
             .collect();
 
-        self.hub_session
-            .new_blob()
-            .from_err()
-            .and_then(move |blob| {
-                blob.upload_from_stream(tarball_stream)
-                    .from_err()
-                    .and_then(move |_| Ok(blob))
-            })
+        self.upload_to_hub(&tarball_path)
+            .context("uploading the source tarball")
             .and_then(move |blob| {
                 let cmds = generate_deployment_cmds(app_path, blob, progname, sources.mode);
                 debug!("Executing the following build commands: {:#?}", cmds);
@@ -298,6 +293,51 @@ impl SessionMPI {
                     })
                 })
             })
+    }
+
+    fn upload_to_hub(&self, file_path: &Path) -> impl Future<Item = Blob, Error = GUError> {
+        let fname = file_path.to_string_lossy().into_owned();
+        let file = fs::read(file_path).map(Into::into);
+        let file_stream = futures::stream::once(file);
+        self.hub_session
+            .new_blob()
+            .from_err()
+            .and_then(move |blob| {
+                info!("Uploading the file {} to the hub", fname);
+                blob.upload_from_stream(file_stream)
+                    .and_then(move |_| Ok(blob))
+            })
+    }
+
+    pub fn upload_input(
+        &self,
+        input_tarball: PathBuf,
+    ) -> impl Future<Item = (), Error = failure::Error> {
+        let root_session = self.root_provider().session.clone();
+        let name = input_tarball
+            .file_name()
+            .ok_or_else(|| format_err!("input_tarball is not a file"))
+            .and_then(|s| {
+                s.to_str()
+                    .ok_or_context("invalid UTF-8")
+                    .map(str::to_owned)
+                    .map_err(Into::into)
+            });
+
+        self.upload_to_hub(&input_tarball)
+            .context("uploading input data")
+            .join(name.into_future())
+            .and_then(move |(blob, name)| {
+                info!("Downloading the input data, {}", name);
+
+                let download_cmd = Command::DownloadFile {
+                    format: ResourceFormat::Tar,
+                    uri: blob.uri(),
+                    file_path: "".to_owned(),
+                };
+                root_session.update(vec![download_cmd]).from_err()
+            })
+            .and_then(|_| Ok(()))
     }
 
     pub fn retrieve_output(
