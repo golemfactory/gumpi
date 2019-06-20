@@ -27,6 +27,11 @@ pub struct OutputConfig {
     pub target: PathBuf,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InputConfig {
+    pub source: PathBuf,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JobConfig {
     pub progname: String,
@@ -34,7 +39,7 @@ pub struct JobConfig {
     pub mpiargs: Option<Vec<String>>,
     pub sources: Option<Sources>,
     pub output: Option<OutputConfig>,
-    pub input: Option<PathBuf>,
+    pub input: Option<InputConfig>,
 }
 
 impl JobConfig {

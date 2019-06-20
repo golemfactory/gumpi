@@ -23,7 +23,10 @@ target = "game-life-outs.tar"
 # if present, gumpi will use the given tarball to build the application
 # if missing, gumpi will assume that the binary is already present on the machine
 [sources]
-# path to the tarball containing the sources, relative to the configuration file
+# path to the tarball containing the sources, relative to the job configuration file
+#
+# For this example, this is just the tarball created by `git archive` from the
+# following repository: https://github.com/marmistrz/game-life
 path = "game-life.tar"
 # build system. Supported: "Make" or "CMake"
 mode = "CMake"

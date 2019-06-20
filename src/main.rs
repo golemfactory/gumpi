@@ -77,8 +77,8 @@ fn gumpi_async(
 
         // The initialization of the provider may take time,
     // so check if the file exists at all in advance
-    if let Some(input_path) = &config.input {
-        let input_path = jobconfig_dir.join(input_path);
+    if let Some(input) = &config.input {
+        let input_path = jobconfig_dir.join(&input.source);
         if !input_path.is_file() {
             return Err(format_err!("The input data doesn't exist"));
         }
@@ -130,8 +130,8 @@ fn gumpi_async(
                 Either::B(future::ok(None))
             };
 
-            let upload_input = if let Some(input_path) = config.input.clone() {
-                let input_path = jobconfig_dir.clone().join(input_path);
+            let upload_input = if let Some(input) = config.input.clone() {
+                let input_path = jobconfig_dir.clone().join(input.source);
                 Either::A(session.upload_input(input_path))
             } else {
                 Either::B(future::ok(()))
