@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 actix = "0.7"
+actix-web = "0.7.19"
 bytes = "0.4.12"
 env_logger = "0.6.1"
 failure = "0.1.5"
@@ -17,7 +18,10 @@ structopt = "0.2.15"
 tokio = "0.1.18"
 tokio-signal = "0.2.7"
 toml = "0.5.0"
-actix-web = "0.7.19"
+
+[dependencies.failure_ext]
+version = "0.1.1"
+features = ["future_ext"]
 
 [dependencies.gu-client]
 branch = "release/0.2"

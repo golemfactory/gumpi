@@ -1,12 +1,12 @@
 //use super::{Command, ProviderSession, ResourceFormat};
 use crate::{
     error::Error,
-    failure_ext::{FutureExt, OptionExt},
     jobconfig::{BuildType, OutputConfig, Sources},
     session::gu_client_ext::PeerHardwareQuery,
 };
 use actix_web::{client, HttpMessage};
 use failure::{format_err, ResultExt};
+use failure_ext::{FutureExt, OptionExt};
 use futures::{
     future::{self, Either},
     prelude::*,
