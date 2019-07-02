@@ -1,0 +1,46 @@
+# the name of the binary that will be produced
+progname = "heat_solver"
+# the command line arguments that should be passed to the program
+args = ["--size", "480", "--input", "input.txt", "--noresults"]
+# (optional) extra arguments that should be passed to mpirun
+# mpiargs = ["--mca", "btl_tcp_if_include", "10.30.8.0/22"]
+
+# (optional) the description of the application input
+#
+# Use this section to configure the input data for your workload.
+[input]
+# The path to the tarball, containing the input data for the workload,
+# relative to the job configuration file
+#
+# For this example, `heat_solver_input.tar` can be generated using the following
+# bash commands:
+#       for i in {1..480}; do printf '0 %.0s' {1..480} > input.txt; done
+#       tar -cvf heat_solver_input.tar input.txt
+source = "heat_solver_input.tar"
+
+
+# (optional) the description of the application output
+#
+# Use this section to configure the application artifacts that should be
+# sent back to your computer.
+[output]
+# the path to the directory on the PROVIDER node containing the relevant output,
+# relatively to the application working directory
+# source = "output"
+
+# desired path to the file containing the outputs from the provider,
+# relative to the program working directory
+# this file will be created on the CLIENT computer
+# target = "heat_solver_outs.tar"
+
+# (optional) configuration of the application sources
+# if present, gumpi will use the given tarball to build the application
+# if missing, gumpi will assume that the binary is already present on the machine
+[sources]
+# path to the tarball containing the sources, relative to the job configuration file
+#
+# For this example, this is just the tarball created by `git archive` from the
+# following repository: https://github.com/marmistrz/game-life
+path = "game-life.tar"
+# build system. Supported: "Make" or "CMake"
+mode = "CMake"
