@@ -75,12 +75,15 @@ fn gumpi_async(
         .to_owned();
     let noclean = opt.noclean;
 
-        // The initialization of the provider may take time,
+    // The initialization of the provider may take time,
     // so check if the file exists at all in advance
     if let Some(input) = &config.input {
         let input_path = jobconfig_dir.join(&input.source);
         if !input_path.is_file() {
-            return Err(format_err!("The input data doesn't exist"));
+            return Err(format_err!(
+                "The input data, {}, doesn't exist",
+                input_path.to_string_lossy()
+            ));
         }
     };
 
@@ -139,7 +142,7 @@ fn gumpi_async(
 
             Either::B(
                 deploy_prefix
-                .join(upload_input)
+                    .join(upload_input)
                     .and_then(move |(deploy_prefix, ())| {
                         session
                             .exec(

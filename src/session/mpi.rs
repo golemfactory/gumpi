@@ -266,6 +266,7 @@ impl SessionMPI {
             .context("uploading the source tarball")
             .and_then(move |blob| {
                 let cmds = generate_deployment_cmds(app_path, blob, progname, sources.mode);
+                info!("Building the application on provider nodes");
                 debug!("Executing the following build commands: {:#?}", cmds);
                 let build_futs = deployments
                     .into_iter()
