@@ -134,7 +134,7 @@ fn gumpi_async(
             };
 
             let upload_input = if let Some(input) = config.input.clone() {
-                let input_path = jobconfig_dir.clone().join(input.source);
+                let input_path = jobconfig_dir.join(input.source);
                 Either::A(session.upload_input(input_path))
             } else {
                 Either::B(future::ok(()))
