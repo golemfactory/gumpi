@@ -85,7 +85,7 @@ fn gumpi_async(
                 input_path.to_string_lossy()
             ));
         }
-    };
+    }
 
     let future = SessionMPI::init(opt.hub, prov_filter)
         .handle_ctrlc()
