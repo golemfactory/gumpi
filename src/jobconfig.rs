@@ -23,8 +23,13 @@ pub struct Sources {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutputConfig {
-    pub source: PathBuf, 
+    pub source: PathBuf,
     pub target: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InputConfig {
+    pub source: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -34,6 +39,7 @@ pub struct JobConfig {
     pub mpiargs: Option<Vec<String>>,
     pub sources: Option<Sources>,
     pub output: Option<OutputConfig>,
+    pub input: Option<InputConfig>,
 }
 
 impl JobConfig {

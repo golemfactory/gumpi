@@ -50,7 +50,10 @@ fn init_logger() {
     env_logger::init()
 }
 
-fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = failure::Error> {
+fn gumpi_async(
+    opt: Opt,
+    config: JobConfig,
+) -> Fallible<impl Future<Item = (), Error = failure::Error>> {
     let progname = config.progname.clone();
     let cpus_requested = opt.numproc;
     let prov_filter = if opt.providers.is_empty() {
@@ -64,14 +67,26 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
     // It's safe to call expect here - at this point opt.jobconfig
     // is guaranteed to be a valid filepath, which is checked by
     // JobConfig::from_file in main.rs
-    let sources_dir = opt
+    let jobconfig_dir = opt
         .jobconfig
         .parent()
         .expect("Invalid jobconfig path")
         .to_owned();
     let noclean = opt.noclean;
 
-    SessionMPI::init(opt.hub, prov_filter)
+    // The initialization of the provider may take time,
+    // so check if the file exists at all in advance
+    if let Some(input) = &config.input {
+        let input_path = jobconfig_dir.join(&input.source);
+        if !input_path.is_file() {
+            return Err(format_err!(
+                "The input data, {}, doesn't exist",
+                input_path.to_string_lossy()
+            ));
+        }
+    }
+
+    let future = SessionMPI::init(opt.hub, prov_filter)
         .handle_ctrlc()
         .context("initializing session")
         .and_then(move |session| {
@@ -95,7 +110,7 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
             let deploy_prefix = if let Some(sources) = config.sources.clone() {
                 Either::A(
                     session
-                        .deploy(sources_dir, sources, progname)
+                        .deploy(jobconfig_dir.clone(), sources, progname)
                         .context("deploying the sources")
                         .and_then(|depl| {
                             let DeploymentInfo {
@@ -117,9 +132,17 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                 Either::B(future::ok(None))
             };
 
+            let upload_input = if let Some(input) = config.input.clone() {
+                let input_path = jobconfig_dir.join(input.source);
+                Either::A(session.upload_input(input_path))
+            } else {
+                Either::B(future::ok(()))
+            };
+
             Either::B(
                 deploy_prefix
-                    .and_then(move |deploy_prefix| {
+                    .join(upload_input)
+                    .and_then(move |(deploy_prefix, ())| {
                         session
                             .exec(
                                 cpus_requested,
@@ -162,7 +185,8 @@ fn gumpi_async(opt: Opt, config: JobConfig) -> impl Future<Item = (), Error = fa
                             .then(|_| fut)
                     }),
             )
-        })
+        });
+    Ok(future)
 }
 
 fn run() -> Fallible<()> {
@@ -170,5 +194,5 @@ fn run() -> Fallible<()> {
     let config = JobConfig::from_file(&opt.jobconfig).context("reading job config")?;
 
     let mut sys = System::new("gumpi");
-    sys.block_on(gumpi_async(opt, config))
+    sys.block_on(gumpi_async(opt, config)?)
 }
