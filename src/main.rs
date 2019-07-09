@@ -55,7 +55,9 @@ fn gumpi_async(
     config: JobConfig,
 ) -> Fallible<impl Future<Item = (), Error = failure::Error>> {
     let progname = config.progname.clone();
-    let cpus_requested = opt.numproc;
+    let numproc = opt.numproc;
+    let numthreads = opt.numthreads;
+    let cpus_requested = opt.numproc; // TODO this has to be adapted when we allow threads
     let prov_filter = if opt.providers.is_empty() {
         None
     } else {
@@ -145,7 +147,8 @@ fn gumpi_async(
                     .and_then(move |(deploy_prefix, ())| {
                         session
                             .exec(
-                                cpus_requested,
+                                numproc,
+                                numthreads,
                                 config.progname,
                                 config.args,
                                 config.mpiargs,

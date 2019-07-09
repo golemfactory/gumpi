@@ -37,6 +37,12 @@ pub struct ProviderMPI {
     info: PeerInfo,
 }
 
+impl ProviderMPI {
+    fn num_cores(&self) -> usize {
+        self.hardware.num_cores()
+    }
+}
+
 pub struct SessionMPI {
     providers: Vec<ProviderMPI>,
     hub_session: HubSession,
@@ -152,8 +158,12 @@ impl SessionMPI {
         self.providers.first().expect("no providers")
     }
 
-    pub fn hostfile(&self) -> String {
-        let peers = &self.providers;
+    pub fn hostfile(&self, numproc: usize, threads_per_proc: usize) -> String {
+        let mut peers: Vec<&ProviderMPI> = self.providers.iter().collect();
+        // The sort will become unnecessary once golem-unlimited gets
+        // some scheduling capabilities.
+        peers.sort_unstable_by_key(|peer| peer.num_cores());
+        //let peers_sorted = peers.sort_unstable_by_key(ProviderMPI::num_cores);
         let file_lines: Vec<_> = peers
             .iter()
             .map(|peer| {
@@ -176,7 +186,7 @@ impl SessionMPI {
 
     pub fn exec<T: Into<String>>(
         &self,
-        nproc: usize,
+        nproc: usize, nthreads: usize,
         progname: T,
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,
@@ -203,7 +213,7 @@ impl SessionMPI {
         ]);
         cmdline.extend(args.into_iter().map(T::into));
 
-        let hostfile = self.hostfile();
+        let hostfile = self.hostfile(nproc, nthreads);
         info!("HOSTFILE:\n{}", hostfile);
 
         let upload_cmd = Command::WriteFile {
