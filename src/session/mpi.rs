@@ -41,6 +41,10 @@ impl ProviderMPI {
     fn num_cores(&self) -> usize {
         self.hardware.num_cores()
     }
+
+    fn node_id(&self) -> NodeId {
+        self.info.node_id
+    }
 }
 
 pub struct SessionMPI {
@@ -158,23 +162,29 @@ impl SessionMPI {
         self.providers.first().expect("no providers")
     }
 
-    pub fn hostfile(&self, numproc: usize, threads_per_proc: usize) -> String {
+    /// Creates a hostfile for all connected providers
+    pub fn hostfile(&self, threads_per_proc: usize) -> String {
         let mut peers: Vec<&ProviderMPI> = self.providers.iter().collect();
         // The sort will become unnecessary once golem-unlimited gets
         // some scheduling capabilities.
         peers.sort_unstable_by_key(|peer| peer.num_cores());
-        //let peers_sorted = peers.sort_unstable_by_key(ProviderMPI::num_cores);
         let file_lines: Vec<_> = peers
             .iter()
             .map(|peer| {
-                let ip_sock = &peer.info.peer_addr;
-                let ip_sock: SocketAddr = ip_sock
-                    .parse()
-                    .unwrap_or_else(|_| panic!("GU returned an invalid IP address, {}", ip_sock));
-                let ip = ip_sock.ip();
+                let ip = {
+                    let ip_sock = &peer.info.peer_addr;
+                    let ip_sock: SocketAddr = ip_sock.parse().unwrap_or_else(|_| {
+                        panic!("GU returned an invalid IP address, {}", ip_sock)
+                    });
+                    ip_sock.ip()
+                };
                 let cpus = peer.hardware.num_cores();
+                let slots = cpus / threads_per_proc;
+                if slots * threads_per_proc != cpus {
+                    warn!("Peer {:?}: not all cpus allocated", peer.node_id())
+                }
 
-                format!("{} port=4222 slots={}", ip, cpus)
+                format!("{} port=4222 slots={}", ip, slots)
             })
             .collect();
         file_lines.join("\n")
@@ -186,7 +196,8 @@ impl SessionMPI {
 
     pub fn exec<T: Into<String>>(
         &self,
-        nproc: usize, nthreads: usize,
+        nproc: usize,
+        nthreads: usize,
         progname: T,
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,
@@ -213,7 +224,7 @@ impl SessionMPI {
         ]);
         cmdline.extend(args.into_iter().map(T::into));
 
-        let hostfile = self.hostfile(nproc, nthreads);
+        let hostfile = self.hostfile(nthreads);
         info!("HOSTFILE:\n{}", hostfile);
 
         let upload_cmd = Command::WriteFile {
