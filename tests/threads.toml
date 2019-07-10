@@ -1,0 +1,7 @@
+progname = "threads"
+args = []
+
+[sources]
+# create using `tar -cvf threads.tar threads/*`
+path = "threads.tar"
+mode = "Make"
