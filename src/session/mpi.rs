@@ -15,6 +15,7 @@ use gu_client::error::Error as GUError;
 
 use gu_client::{
     model::{
+        dockerman::CreateOptions,
         envman::{Command, CreateSession, Image, ResourceFormat},
         peers::PeerInfo,
         session::HubSessionSpec,
@@ -80,7 +81,7 @@ impl SessionMPI {
             name: "gumpi".to_owned(),
             tags: vec![],
             note: None,
-            options: (),
+            options: CreateOptions::default(),
         };
 
         Either::B(hub_session.join(peers).context("adding peers").and_then(
@@ -197,6 +198,7 @@ impl SessionMPI {
         let progname = deploy_prefix.map(|p| p + &progname).unwrap_or(progname);
 
         cmdline.extend(vec![
+            "--allow-run-as-root".to_owned(), // FIXME we need an extra option
             "-n".to_owned(),
             nproc.to_string(),
             "--hostfile".to_owned(),
@@ -221,12 +223,15 @@ impl SessionMPI {
         };
 
         root.session
-            .update(vec![upload_cmd, exec_cmd])
+            .update(vec![Command::Open, upload_cmd, exec_cmd])
             .map_err(|e| match e {
                 GUError::ProcessingResult(mut outs) => {
+                    // FIXME
                     assert_eq!(outs.len(), 2);
 
-                    if outs[0] == "OK" {
+                    // This is awful and hacky, but GU is inconsistent
+                    // see https://github.com/golemfactory/gumpi/issues/52
+                    if outs[0].contains("OK") {
                         Error::ExecutionError(outs.swap_remove(1)).into()
                     } else {
                         format_err!("WriteFile failed: {}", outs[0])
@@ -237,6 +242,7 @@ impl SessionMPI {
             .and_then(|mut outs| {
                 // outs should be a vector of length 2, of form ["OK", execution_output]
                 // only the latter is interesting to us
+                info!("{:?}", outs);
                 Ok(outs.swap_remove(1))
             })
     }
@@ -255,7 +261,7 @@ impl SessionMPI {
         sources: Sources,
         progname: String,
     ) -> impl Future<Item = DeploymentInfo, Error = failure::Error> {
-        let app_path = "app".to_owned();
+        let app_path = "/".to_owned();
         let tarball_path = config_path.join(&sources.path);
 
         let deployments: Vec<_> = self
@@ -292,7 +298,7 @@ impl SessionMPI {
                 future::join_all(build_futs).and_then(|logs| {
                     Ok(DeploymentInfo {
                         logs,
-                        deploy_prefix: "/tmp/".to_owned(),
+                        deploy_prefix: "/".to_owned(),
                     })
                 })
             })
@@ -434,21 +440,22 @@ fn generate_deployment_cmds(
 
     // For the CMake backend we use the EXECUTABLE_OUTPUT_PATH CMake variable
     // For the Make backend we just move the file around
-    match mode {
+    let mut commands = vec![Command::Open, download_cmd]; // TODO what if there are no sources
+    let compile_commands = match mode {
         BuildType::Make => {
             let mv_cmd = Command::Exec {
                 executable: "mv".to_owned(),
-                args: vec![[app_path, progname].join("/"), "tmp/".to_owned()],
+                args: vec![[app_path, progname].join("/"), "/".to_owned()],
             };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
                 args: vec!["-C".to_owned(), "app".to_owned()],
             };
-            vec![download_cmd, make_cmd, mv_cmd]
+            vec![make_cmd, mv_cmd]
         }
         BuildType::CMake => {
             let cmake_cmd = Command::Exec {
-                executable: "cmake/bin/cmake".to_owned(),
+                executable: "cmake".to_owned(),
                 args: vec![
                     app_path.clone(),
                     "-DCMAKE_C_COMPILER=mpicc".to_owned(),
@@ -461,7 +468,9 @@ fn generate_deployment_cmds(
                 executable: "make".to_owned(),
                 args: vec![],
             };
-            vec![download_cmd, cmake_cmd, make_cmd]
+            vec![cmake_cmd, make_cmd]
         }
-    }
+    };
+    commands.extend(compile_commands);
+    commands
 }
