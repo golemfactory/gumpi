@@ -170,10 +170,10 @@ fn gumpi_async(
                         // At this point, there should be no other session references
                         // remaining. If it isn't so, we want to stay on the safe side
                         // and will not attempt to cleanup.
-                        info!("Cleaning up");
                         let cleanup = if noclean {
                             Either::A(future::ok(()))
                         } else {
+                            info!("Cleaning up");
                             match Rc::get_mut(&mut session_clone) {
                                 Some(sess) => Either::B(sess.close().from_err()),
                                 None => Either::A(future::err(format_err!(
