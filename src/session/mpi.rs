@@ -42,8 +42,10 @@ pub struct SessionMPI {
     hub_session: HubSession,
 }
 
-const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image.hdi";
-const GUMPI_IMAGE_SHA1: &str = "e50575bb61c20b716e89a307264bdb6e5e981919";
+const GUMPI_IMAGE_URL: &str = "marmistrz/gumpi:0.0.1";
+const GUMPI_IMAGE_CHECKSUM: &str =
+    "sha256:285b81248af0b9e0f11cfde12edc3cb149b1b74afceb43b6fea8c662d78aeaaa";
+const GUMPI_ENV_TYPE: &str = "docker";
 
 impl SessionMPI {
     pub fn init(
@@ -70,10 +72,10 @@ impl SessionMPI {
         let peers = hub_conn.list_peers();
 
         let peer_session_spec = CreateSession {
-            env_type: "hd".to_owned(),
+            env_type: GUMPI_ENV_TYPE.to_owned(),
             image: Image {
                 url: GUMPI_IMAGE_URL.to_owned(),
-                hash: format!("SHA1:{}", GUMPI_IMAGE_SHA1),
+                hash: GUMPI_IMAGE_CHECKSUM.to_owned(),
             },
             name: "gumpi".to_owned(),
             tags: vec![],
