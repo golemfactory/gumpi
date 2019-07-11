@@ -24,9 +24,11 @@ version = "0.1.1"
 features = ["future_ext"]
 
 [dependencies.gu-client]
-branch = "clone-dockerman"
-git = "https://github.com/marmistrz/golem-unlimited"
+#branch = "clone-dockerman"
+path = "../golem-unlimited/gu-client"
+#git = "https://github.com/marmistrz/golem-unlimited"
 
 [dependencies.gu-hardware]
-branch = "clone-dockerman"
-git = "https://github.com/marmistrz/golem-unlimited"
+#branch = "clone-dockerman"
+#git = "https://github.com/marmistrz/golem-unlimited"
+path = "../golem-unlimited/gu-hardware"

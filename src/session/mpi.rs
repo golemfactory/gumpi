@@ -48,6 +48,10 @@ const GUMPI_IMAGE_CHECKSUM: &str =
     "sha256:285b81248af0b9e0f11cfde12edc3cb149b1b74afceb43b6fea8c662d78aeaaa";
 const GUMPI_ENV_TYPE: &str = "docker";
 
+const APP_SOURCES_PATH: &str = "/home/mpirun";
+const APP_INPUT_PATH: &str = "/input";
+const APP_WORKDIR: &str = "/output";
+
 impl SessionMPI {
     pub fn init(
         hub_ip: SocketAddr,
@@ -202,7 +206,7 @@ impl SessionMPI {
             "-n".to_owned(),
             nproc.to_string(),
             "--hostfile".to_owned(),
-            "hostfile".to_owned(),
+            "/hostfile".to_owned(),
             progname,
         ]);
         cmdline.extend(args.into_iter().map(T::into));
@@ -212,7 +216,7 @@ impl SessionMPI {
 
         let upload_cmd = Command::WriteFile {
             content: hostfile,
-            file_path: "hostfile".to_owned(),
+            file_path: "/hostfile".to_owned(),
         };
 
         info!("Executing mpirun with args {:?}...", cmdline);
@@ -223,11 +227,13 @@ impl SessionMPI {
         };
 
         root.session
-            .update(vec![Command::Open, upload_cmd, exec_cmd])
+            .update(vec![upload_cmd, exec_cmd])
             .map_err(|e| match e {
                 GUError::ProcessingResult(mut outs) => {
                     // FIXME
-                    assert_eq!(outs.len(), 2);
+                    // assert_eq!(outs.len(), 2);
+                    use log::error;
+                    error!("Processing error: {:?}", outs);
 
                     // This is awful and hacky, but GU is inconsistent
                     // see https://github.com/golemfactory/gumpi/issues/52
@@ -261,7 +267,6 @@ impl SessionMPI {
         sources: Sources,
         progname: String,
     ) -> impl Future<Item = DeploymentInfo, Error = failure::Error> {
-        let app_path = "/".to_owned();
         let tarball_path = config_path.join(&sources.path);
 
         let deployments: Vec<_> = self
@@ -273,7 +278,12 @@ impl SessionMPI {
         self.upload_to_hub(&tarball_path)
             .context("uploading the source tarball")
             .and_then(move |blob| {
-                let cmds = generate_deployment_cmds(app_path, blob, progname, sources.mode);
+                let cmds = generate_deployment_cmds(
+                    APP_SOURCES_PATH.to_owned(),
+                    blob,
+                    progname,
+                    sources.mode,
+                );
                 info!("Building the application on provider nodes");
                 debug!("Executing the following build commands: {:#?}", cmds);
                 let build_futs = deployments
@@ -449,9 +459,9 @@ fn generate_deployment_cmds(
             };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
-                args: vec!["-C".to_owned(), "app".to_owned()],
+                args: vec!["-C".to_owned(), APP_SOURCES_PATH.to_owned()],
             };
-            vec![make_cmd, mv_cmd]
+            vec![make_cmd /*, mv_cmd*/]
         }
         BuildType::CMake => {
             let cmake_cmd = Command::Exec {
