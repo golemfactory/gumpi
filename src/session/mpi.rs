@@ -206,7 +206,7 @@ impl SessionMPI {
             "-n".to_owned(),
             nproc.to_string(),
             "--hostfile".to_owned(),
-            "/hostfile".to_owned(),
+            "hostfile".to_owned(),
             progname,
         ]);
         cmdline.extend(args.into_iter().map(T::into));
@@ -216,7 +216,7 @@ impl SessionMPI {
 
         let upload_cmd = Command::WriteFile {
             content: hostfile,
-            file_path: "/hostfile".to_owned(),
+            file_path: "hostfile".to_owned(),
         };
 
         info!("Executing mpirun with args {:?}...", cmdline);
