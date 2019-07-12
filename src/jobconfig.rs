@@ -61,7 +61,11 @@ impl JobConfig {
 pub struct Opt {
     #[structopt(short = "n", long = "numproc", help = "number of MPI processes")]
     pub numproc: usize,
-    #[structopt(short = "t", long = "numthreads", help = "number of threads per process")]
+    #[structopt(
+        short = "t",
+        long = "numthreads",
+        help = "number of threads per process"
+    )]
     pub numthreads: usize,
     #[structopt(short = "h", long = "hub")]
     pub hub: SocketAddr,
