@@ -57,7 +57,7 @@ fn gumpi_async(
     let progname = config.progname.clone();
     let numproc = opt.numproc;
     let numthreads = opt.numthreads;
-    let cpus_requested = opt.numproc; // TODO this has to be adapted when we allow threads
+    let slots_requested = opt.numproc; // TODO this has to be adapted when we allow threads
     let prov_filter = if opt.providers.is_empty() {
         None
     } else {
@@ -96,13 +96,15 @@ fn gumpi_async(
             let session = Rc::new(session);
             let mut session_clone = Rc::clone(&session);
 
-            info!("available cores: {}", session.total_cpus());
-            let cpus_available = session.total_cpus();
-            if cpus_available < cpus_requested {
+            let slots_available = session.total_slots(numthreads);
+            info!("available slots: {}", slots_available);
+            if slots_available < slots_requested {
                 return Either::A(future::err(format_err!(
-                    "Not enough CPUs available: requested: {}, available: {}",
-                    cpus_requested,
-                    cpus_available
+                    "Not enough slots available: requested: {}, available: {}. \
+                     One slot corresponds to {} CPUs",
+                    slots_requested,
+                    slots_available,
+                    numthreads
                 )));
             }
             info!("Compiling the sources...");

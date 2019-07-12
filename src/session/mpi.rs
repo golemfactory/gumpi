@@ -190,8 +190,8 @@ impl SessionMPI {
         file_lines.join("\n")
     }
 
-    pub fn total_cpus(&self) -> usize {
-        self.providers.iter().map(|p| p.hardware.num_cores()).sum()
+    pub fn total_slots(&self, threads_per_proc: usize) -> usize {
+        self.providers.iter().map(|p| p.hardware.num_cores() / threads_per_proc).sum()
     }
 
     pub fn exec<T: Into<String>>(
