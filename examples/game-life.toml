@@ -12,7 +12,7 @@ args = ["2", "1", "12000", "10"]
 [output]
 # the path to the directory on the PROVIDER node containing the relevant output,
 # relatively to the application working directory
-source = "output"
+source = "/output"
 
 # desired path to the file containing the outputs from the provider,
 # relative to the program working directory

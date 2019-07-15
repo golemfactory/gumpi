@@ -9,7 +9,7 @@ mod session;
 use crate::{
     async_ctrlc::{AsyncCtrlc, CtrlcEvent},
     jobconfig::{JobConfig, Opt},
-    session::mpi::{DeploymentInfo, SessionMPI},
+    session::mpi::SessionMPI,
 };
 use actix::prelude::*;
 use failure::{format_err, Fallible, ResultExt};
@@ -54,7 +54,6 @@ fn gumpi_async(
     opt: Opt,
     config: JobConfig,
 ) -> Fallible<impl Future<Item = (), Error = failure::Error>> {
-    let progname = config.progname.clone();
     let cpus_requested = opt.numproc;
     let prov_filter = if opt.providers.is_empty() {
         None
@@ -104,20 +103,16 @@ fn gumpi_async(
                 )));
             }
             info!("Compiling the sources...");
-            // deploy_prefix is the location of the folder, where the executable
-            // resides. See the documentation for SessionMPI::deploy for more
-            // details
-            let deploy_prefix = if let Some(sources) = config.sources.clone() {
+            // impl Future<Item = bool>
+            // * `true` if we have compiled the sources on the provider node
+            // * `false` otherwise
+            let deploy_future = if let Some(sources) = config.sources.clone() {
                 Either::A(
                     session
-                        .deploy(jobconfig_dir.clone(), sources, progname)
+                        .deploy(jobconfig_dir.clone(), sources)
                         .context("deploying the sources")
                         .and_then(|depl| {
-                            let DeploymentInfo {
-                                logs,
-                                deploy_prefix,
-                            } = depl;
-                            for comp in logs {
+                            for comp in depl.logs {
                                 let logs = comp.logs.join("\n------------------\n");
                                 info!(
                                     "Provider {} compilation output:\n{}",
@@ -125,11 +120,11 @@ fn gumpi_async(
                                     logs
                                 );
                             }
-                            Ok(Some(deploy_prefix))
+                            Ok(true)
                         }),
                 )
             } else {
-                Either::B(future::ok(None))
+                Either::B(future::ok(false))
             };
 
             let upload_input = if let Some(input) = config.input.clone() {
@@ -140,16 +135,16 @@ fn gumpi_async(
             };
 
             Either::B(
-                deploy_prefix
+                deploy_future
                     .join(upload_input)
-                    .and_then(move |(deploy_prefix, ())| {
+                    .and_then(move |(deployed, ())| {
                         session
                             .exec(
                                 cpus_requested,
                                 config.progname,
                                 config.args,
                                 config.mpiargs,
-                                deploy_prefix,
+                                deployed,
                             )
                             .context("program execution")
                             .join(future::ok(session))

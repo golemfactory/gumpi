@@ -11,12 +11,11 @@ use futures::{
     future::{self, Either},
     prelude::*,
 };
-use gu_client::error::Error as GUError;
-
 use gu_client::{
+    error::Error as GUError,
     model::{
         dockerman::CreateOptions,
-        envman::{Command, CreateSession, Image, ResourceFormat},
+        envman::{Command, CreateSession, ExecOptions, Image, ResourceFormat},
         peers::PeerInfo,
         session::HubSessionSpec,
     },
@@ -47,6 +46,8 @@ const GUMPI_IMAGE_URL: &str = "marmistrz/gumpi:0.0.1";
 const GUMPI_IMAGE_CHECKSUM: &str =
     "sha256:285b81248af0b9e0f11cfde12edc3cb149b1b74afceb43b6fea8c662d78aeaaa";
 const GUMPI_ENV_TYPE: &str = "docker";
+
+const GUMPI_DOCKER_USER: &str = "mpirun";
 
 const APP_SOURCES_PATH: &str = "/home/mpirun";
 const APP_INPUT_PATH: &str = "/input";
@@ -85,7 +86,10 @@ impl SessionMPI {
             name: "gumpi".to_owned(),
             tags: vec![],
             note: None,
-            options: CreateOptions::default(),
+            options: CreateOptions {
+                autostart: true,
+                ..CreateOptions::default()
+            },
         };
 
         Either::B(hub_session.join(peers).context("adding peers").and_then(
@@ -187,7 +191,7 @@ impl SessionMPI {
         progname: T,
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,
-        deploy_prefix: Option<String>,
+        deployed: bool,
     ) -> impl Future<Item = String, Error = failure::Error> {
         let root = self.root_provider();
         let mut cmdline = vec![];
@@ -199,7 +203,11 @@ impl SessionMPI {
         // We've moved the executable to /tmp in deploy, so now correct the path
         // to reflect this change.
         let progname = progname.into();
-        let progname = deploy_prefix.map(|p| p + &progname).unwrap_or(progname);
+        let progname = if deployed {
+            format!("{}/{}", APP_SOURCES_PATH, progname)
+        } else {
+            progname
+        };
 
         cmdline.extend(vec![
             "--allow-run-as-root".to_owned(), // FIXME we need an extra option
@@ -224,13 +232,16 @@ impl SessionMPI {
         let exec_cmd = Command::Exec {
             executable: "mpirun".to_owned(),
             args: cmdline,
+            options: ExecOptions {
+                user: GUMPI_DOCKER_USER.to_owned().into(),
+                working_dir: APP_WORKDIR.to_owned().into(),
+            },
         };
 
         root.session
             .update(vec![upload_cmd, exec_cmd])
             .map_err(|e| match e {
                 GUError::ProcessingResult(mut outs) => {
-                    // FIXME
                     // assert_eq!(outs.len(), 2);
                     use log::error;
                     error!("Processing error: {:?}", outs);
@@ -246,7 +257,8 @@ impl SessionMPI {
                 x => x.into(),
             })
             .and_then(|mut outs| {
-                // outs should be a vector of length 2, of form ["OK", execution_output]
+                // in case of successs, outs should be a vector of length 2,
+                // of form [_, execution_output]
                 // only the latter is interesting to us
                 info!("{:?}", outs);
                 Ok(outs.swap_remove(1))
@@ -265,7 +277,6 @@ impl SessionMPI {
         &self,
         config_path: PathBuf,
         sources: Sources,
-        progname: String,
     ) -> impl Future<Item = DeploymentInfo, Error = failure::Error> {
         let tarball_path = config_path.join(&sources.path);
 
@@ -278,12 +289,7 @@ impl SessionMPI {
         self.upload_to_hub(&tarball_path)
             .context("uploading the source tarball")
             .and_then(move |blob| {
-                let cmds = generate_deployment_cmds(
-                    APP_SOURCES_PATH.to_owned(),
-                    blob,
-                    progname,
-                    sources.mode,
-                );
+                let cmds = generate_deployment_cmds(blob, sources.mode);
                 info!("Building the application on provider nodes");
                 debug!("Executing the following build commands: {:#?}", cmds);
                 let build_futs = deployments
@@ -305,12 +311,7 @@ impl SessionMPI {
                     })
                     .collect::<Vec<_>>();
 
-                future::join_all(build_futs).and_then(|logs| {
-                    Ok(DeploymentInfo {
-                        logs,
-                        deploy_prefix: "/".to_owned(),
-                    })
-                })
+                future::join_all(build_futs).and_then(|logs| Ok(DeploymentInfo { logs }))
             })
     }
 
@@ -352,7 +353,7 @@ impl SessionMPI {
                 let download_cmd = Command::DownloadFile {
                     format: ResourceFormat::Tar,
                     uri: blob.uri(),
-                    file_path: "".to_owned(),
+                    file_path: APP_INPUT_PATH.to_owned(),
                 };
                 root_session.update(vec![download_cmd]).from_err()
             })
@@ -418,7 +419,6 @@ impl SessionMPI {
 
 pub struct DeploymentInfo {
     pub logs: Vec<CompilationInfo>,
-    pub deploy_prefix: String,
 }
 
 #[derive(Debug)]
@@ -429,16 +429,11 @@ pub struct CompilationInfo {
 
 /// app_path: the directory where the app sources should reside
 ///             on the provider side
-fn generate_deployment_cmds(
-    app_path: String,
-    blob: Blob,
-    progname: String,
-    mode: BuildType,
-) -> Vec<Command> {
+fn generate_deployment_cmds(blob: Blob, mode: BuildType) -> Vec<Command> {
     let download_cmd = Command::DownloadFile {
         format: ResourceFormat::Tar,
         uri: blob.uri(),
-        file_path: app_path.clone(),
+        file_path: APP_SOURCES_PATH.to_owned(),
     };
 
     // If we create a session per provider, every session
@@ -450,33 +445,35 @@ fn generate_deployment_cmds(
 
     // For the CMake backend we use the EXECUTABLE_OUTPUT_PATH CMake variable
     // For the Make backend we just move the file around
-    let mut commands = vec![Command::Open, download_cmd]; // TODO what if there are no sources
+    let mut commands = vec![download_cmd];
+    let options = ExecOptions {
+        user: "mpirun".to_owned().into(),
+        working_dir: APP_SOURCES_PATH.to_owned().into(),
+    };
     let compile_commands = match mode {
         BuildType::Make => {
-            let mv_cmd = Command::Exec {
-                executable: "mv".to_owned(),
-                args: vec![[app_path, progname].join("/"), "/".to_owned()],
-            };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
                 args: vec!["-C".to_owned(), APP_SOURCES_PATH.to_owned()],
+                options: options.clone(),
             };
-            vec![make_cmd /*, mv_cmd*/]
+            vec![make_cmd]
         }
         BuildType::CMake => {
             let cmake_cmd = Command::Exec {
                 executable: "cmake".to_owned(),
                 args: vec![
-                    app_path.clone(),
+                    ".".to_owned(),
                     "-DCMAKE_C_COMPILER=mpicc".to_owned(),
                     "-DCMAKE_CXX_COMPILER=mpicxx".to_owned(),
                     "-DCMAKE_BUILD_TYPE=Release".to_owned(),
-                    "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(),
                 ],
+                options: options.clone(),
             };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
                 args: vec![],
+                options: options.clone(),
             };
             vec![cmake_cmd, make_cmd]
         }
