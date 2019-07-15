@@ -51,7 +51,7 @@ const GUMPI_DOCKER_USER: &str = "mpirun";
 
 const APP_SOURCES_PATH: &str = "/home/mpirun";
 const APP_INPUT_PATH: &str = "/input";
-const APP_WORKDIR: &str = "/output";
+const APP_WORKDIR: &str = "/mnt"; // FIXME
 
 impl SessionMPI {
     pub fn init(
@@ -200,9 +200,9 @@ impl SessionMPI {
             cmdline.extend(args.into_iter().map(T::into));
         }
 
-        // We've moved the executable to /tmp in deploy, so now correct the path
-        // to reflect this change.
         let progname = progname.into();
+        // If we've built the sources, we need to give the exact path to the binary
+        // Otherwise it's somewhere on the system, so let the user decide
         let progname = if deployed {
             format!("{}/{}", APP_SOURCES_PATH, progname)
         } else {
@@ -213,7 +213,7 @@ impl SessionMPI {
             "-n".to_owned(),
             nproc.to_string(),
             "--hostfile".to_owned(),
-            "hostfile".to_owned(),
+            "/hostfile".to_owned(),
             progname,
         ]);
         cmdline.extend(args.into_iter().map(T::into));
@@ -426,8 +426,6 @@ pub struct CompilationInfo {
     pub logs: Vec<String>,
 }
 
-/// app_path: the directory where the app sources should reside
-///             on the provider side
 fn generate_deployment_cmds(blob: Blob, mode: BuildType) -> Vec<Command> {
     let download_cmd = Command::DownloadFile {
         format: ResourceFormat::Tar,
@@ -435,15 +433,6 @@ fn generate_deployment_cmds(blob: Blob, mode: BuildType) -> Vec<Command> {
         file_path: APP_SOURCES_PATH.to_owned(),
     };
 
-    // If we create a session per provider, every session
-    // gets a unique identifier. This means that the resulting executable
-    // resides in a different directory on each of the provider nodes,
-    // which causes mpirun to fail.
-    // As a workaround, we provide a symlink to the /tmp directory
-    // in the image and put the resulting binary there.
-
-    // For the CMake backend we use the EXECUTABLE_OUTPUT_PATH CMake variable
-    // For the Make backend we just move the file around
     let mut commands = vec![download_cmd];
     let options = ExecOptions {
         user: "mpirun".to_owned().into(),
