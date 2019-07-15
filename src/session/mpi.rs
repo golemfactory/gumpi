@@ -210,7 +210,6 @@ impl SessionMPI {
         };
 
         cmdline.extend(vec![
-            "--allow-run-as-root".to_owned(), // FIXME we need an extra option
             "-n".to_owned(),
             nproc.to_string(),
             "--hostfile".to_owned(),
