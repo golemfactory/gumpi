@@ -5,7 +5,7 @@ use crate::{
     session::gu_client_ext::PeerHardwareQuery,
 };
 use actix_web::{client, HttpMessage};
-use failure::{format_err, ResultExt};
+use failure::{format_err, Fallible, ResultExt};
 use failure_ext::{FutureExt, OptionExt};
 use futures::{
     future::{self, Either},
@@ -42,16 +42,17 @@ pub struct SessionMPI {
     hub_session: HubSession,
 }
 
-const GUMPI_IMAGE_URL: &str = "marmistrz/gumpi:0.0.1";
+const GUMPI_IMAGE_NAME: &str = "marmistrz/gumpi";
+const GUMPI_IMAGE_VERSION: &str = "0.0.3";
 const GUMPI_IMAGE_CHECKSUM: &str =
     "sha256:285b81248af0b9e0f11cfde12edc3cb149b1b74afceb43b6fea8c662d78aeaaa";
 const GUMPI_ENV_TYPE: &str = "docker";
 
 const GUMPI_DOCKER_USER: &str = "mpirun";
 
-const APP_SOURCES_PATH: &str = "/home/mpirun";
+const APP_SOURCES_PATH: &str = "/app";
 const APP_INPUT_PATH: &str = "/input";
-const APP_WORKDIR: &str = "/mnt"; // FIXME
+const APP_WORKDIR: &str = "/output";
 
 impl SessionMPI {
     pub fn init(
@@ -77,10 +78,11 @@ impl SessionMPI {
         let hub_session = hub_conn.new_session(HubSessionSpec::default());
         let peers = hub_conn.list_peers();
 
+        let docker_image = format!("{}:{}", GUMPI_IMAGE_NAME, GUMPI_IMAGE_VERSION);
         let peer_session_spec = CreateSession {
             env_type: GUMPI_ENV_TYPE.to_owned(),
             image: Image {
-                url: GUMPI_IMAGE_URL.to_owned(),
+                url: docker_image,
                 hash: GUMPI_IMAGE_CHECKSUM.to_owned(),
             },
             name: "gumpi".to_owned(),
@@ -419,14 +421,13 @@ impl SessionMPI {
             })
     }
 
-    pub fn deploy_keys(&self) -> impl Future<Item = (), Error = failure::Error> {
-        // FIXME generate during runtime
+    pub fn deploy_keys(&self) -> Fallible<impl Future<Item = (), Error = failure::Error>> {
         info!("Deploying the keys");
 
-        let (privkey, pubkey) = generate_keypair();
+        let (privkey, pubkey) = generate_keypair().context("generating SSH keys")?;
 
-        let privkey_path = format!("/home/{}/.ssh/id_rsa", GUMPI_DOCKER_USER);
-        let pubkey_path = format!("/home/{}/.ssh/id_rsa.pub", GUMPI_DOCKER_USER);
+        let privkey_path = format!("home/{}/.ssh/id_rsa", GUMPI_DOCKER_USER);
+        let pubkey_path = format!("home/{}/.ssh/id_rsa.pub", GUMPI_DOCKER_USER);
         let authorized_keys_path = format!("home/{}/.ssh/authorized_keys", GUMPI_DOCKER_USER);
 
         let cmds = vec![
@@ -448,14 +449,15 @@ impl SessionMPI {
             .get_deployments()
             .into_iter()
             .map(move |session| session.update(cmds.clone()));
-        future::join_all(futs)
+        let ret = future::join_all(futs)
             .map(|_| ())
             .map_err(|e| -> failure::Error {
                 match e {
                     GUError::ProcessingResult(outs) => Error::KeyDeploymentError(outs).into(),
                     x => x.into(),
                 }
-            })
+            });
+        Ok(ret)
     }
 }
 
@@ -513,8 +515,20 @@ fn generate_deployment_cmds(blob: Blob, mode: BuildType) -> Vec<Command> {
     commands
 }
 
-fn generate_keypair() -> (String, String) {
-    let privkey = fs::read_to_string("/tmp/mpi").expect("Error reading privkey");
-    let pubkey = fs::read_to_string("/tmp/mpi.pub").expect("Error reading pubkey");
-    (privkey, pubkey)
+fn generate_keypair() -> Fallible<(String, String)> {
+    use openssh_keys::PublicKey;
+    use openssl::rsa::Rsa;
+    const SSH_RSA_KEYSIZE: u32 = 4096;
+
+    let rsa = Rsa::generate(SSH_RSA_KEYSIZE)?;
+    let privkey = rsa.private_key_to_pem()?;
+    let privkey = String::from_utf8(privkey)?;
+
+    let e = rsa.e().to_vec();
+    let n = rsa.n().to_vec();
+    let mut pubkey = PublicKey::from_rsa(e, n);
+    pubkey.set_comment("gumpi");
+    let pubkey = pubkey.to_key_format();
+
+    Ok((privkey, pubkey))
 }

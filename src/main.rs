@@ -134,7 +134,11 @@ fn gumpi_async(
                 Either::B(future::ok(()))
             };
 
-            let deploy_keys = session.deploy_keys().from_err();
+            let deploy_keys = session
+                .deploy_keys()
+                .into_future()
+                .flatten()
+                .context("deploying SSH keys");
 
             Either::B(
                 deploy_future
