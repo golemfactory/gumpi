@@ -14,7 +14,7 @@ use futures::{
 use gu_client::{
     error::Error as GUError,
     model::{
-        dockerman::CreateOptions,
+        dockerman::{CreateOptions, NetDef},
         envman::{Command, CreateSession, ExecOptions, Image, ResourceFormat},
         peers::PeerInfo,
         session::HubSessionSpec,
@@ -88,6 +88,7 @@ impl SessionMPI {
             note: None,
             options: CreateOptions {
                 autostart: true,
+                net: Some(NetDef::Host {}),
                 ..CreateOptions::default()
             },
         };
@@ -264,6 +265,13 @@ impl SessionMPI {
             })
     }
 
+    fn get_deployments(&self) -> Vec<PeerSession> {
+        self.providers
+            .iter()
+            .map(|provider| provider.session.clone())
+            .collect()
+    }
+
     /// Returns: the deployment prefix
     ///
     /// The resulting executable may not reside in the root of the GU image.
@@ -279,11 +287,7 @@ impl SessionMPI {
     ) -> impl Future<Item = DeploymentInfo, Error = failure::Error> {
         let tarball_path = config_path.join(&sources.path);
 
-        let deployments: Vec<_> = self
-            .providers
-            .iter()
-            .map(|provider| provider.session.clone())
-            .collect();
+        let deployments: Vec<_> = self.get_deployments();
 
         self.upload_to_hub(&tarball_path)
             .context("uploading the source tarball")
@@ -414,6 +418,45 @@ impl SessionMPI {
                     .map_err(Into::into)
             })
     }
+
+    pub fn deploy_keys(&self) -> impl Future<Item = (), Error = failure::Error> {
+        // FIXME generate during runtime
+        info!("Deploying the keys");
+
+        let (privkey, pubkey) = generate_keypair();
+
+        let privkey_path = format!("/home/{}/.ssh/id_rsa", GUMPI_DOCKER_USER);
+        let pubkey_path = format!("/home/{}/.ssh/id_rsa.pub", GUMPI_DOCKER_USER);
+        let authorized_keys_path = format!("home/{}/.ssh/authorized_keys", GUMPI_DOCKER_USER);
+
+        let cmds = vec![
+            Command::WriteFile {
+                content: privkey,
+                file_path: privkey_path,
+            },
+            Command::WriteFile {
+                content: pubkey.clone(),
+                file_path: pubkey_path,
+            },
+            Command::WriteFile {
+                content: pubkey,
+                file_path: authorized_keys_path,
+            },
+        ];
+
+        let futs = self
+            .get_deployments()
+            .into_iter()
+            .map(move |session| session.update(cmds.clone()));
+        future::join_all(futs)
+            .map(|_| ())
+            .map_err(|e| -> failure::Error {
+                match e {
+                    GUError::ProcessingResult(outs) => Error::KeyDeploymentError(outs).into(),
+                    x => x.into(),
+                }
+            })
+    }
 }
 
 pub struct DeploymentInfo {
@@ -468,4 +511,10 @@ fn generate_deployment_cmds(blob: Blob, mode: BuildType) -> Vec<Command> {
     };
     commands.extend(compile_commands);
     commands
+}
+
+fn generate_keypair() -> (String, String) {
+    let privkey = fs::read_to_string("/tmp/mpi").expect("Error reading privkey");
+    let pubkey = fs::read_to_string("/tmp/mpi.pub").expect("Error reading pubkey");
+    (privkey, pubkey)
 }

@@ -5,6 +5,7 @@ use std::fmt;
 pub enum Error {
     ExecutionError(String),
     CompilationError(Vec<String>),
+    KeyDeploymentError(Vec<String>),
 }
 
 impl fmt::Display for Error {
@@ -15,6 +16,7 @@ impl fmt::Display for Error {
                 let joined = logs.join("\n----------\n");
                 writeln!(f, "compilation error:\n{}", joined)
             }
+            Error::KeyDeploymentError(e) => writeln!(f, "error deploying keys:\n{:?}", e),
         }
     }
 }

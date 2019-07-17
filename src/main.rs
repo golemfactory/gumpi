@@ -134,10 +134,12 @@ fn gumpi_async(
                 Either::B(future::ok(()))
             };
 
+            let deploy_keys = session.deploy_keys().from_err();
+
             Either::B(
                 deploy_future
-                    .join(upload_input)
-                    .and_then(move |(deployed, ())| {
+                    .join3(upload_input, deploy_keys)
+                    .and_then(move |(deployed, (), ())| {
                         session
                             .exec(
                                 cpus_requested,
