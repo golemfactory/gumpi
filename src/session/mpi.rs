@@ -338,7 +338,7 @@ impl SessionMPI {
         &self,
         input_tarball: PathBuf,
     ) -> impl Future<Item = (), Error = failure::Error> {
-        let root_session = self.root_provider().session.clone();
+        let deployments = self.get_deployments();
         let name = input_tarball
             .file_name()
             .ok_or_else(|| format_err!("input_tarball is not a file"))
@@ -360,7 +360,10 @@ impl SessionMPI {
                     uri: blob.uri(),
                     file_path: APP_INPUT_PATH.to_owned(),
                 };
-                root_session.update(vec![download_cmd]).from_err()
+                let futures = deployments
+                    .into_iter()
+                    .map(move |session| session.update(vec![download_cmd.clone()]).from_err());
+                future::join_all(futures)
             })
             .and_then(|_| Ok(()))
     }
