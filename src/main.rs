@@ -156,6 +156,8 @@ fn gumpi_async(
                                 config.mpiargs,
                                 deploy_prefix,
                             )
+                            .into_future() // Result<Future<...>> into Future<Future<...>>
+                            .flatten()
                             .context("program execution")
                             .join(future::ok(session))
                     })
