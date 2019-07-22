@@ -26,9 +26,9 @@ version = "0.1.1"
 features = ["future_ext"]
 
 [dependencies.gu-client]
-branch = "gumpi-docker"
-git = "https://github.com/marmistrz/golem-unlimited"
+branch = "release/0.2"
+git = "https://github.com/golemfactory/golem-unlimited"
 
 [dependencies.gu-hardware]
-branch = "gumpi-docker"
-git = "https://github.com/marmistrz/golem-unlimited"
+branch = "release/0.2"
+git = "https://github.com/golemfactory/golem-unlimited"

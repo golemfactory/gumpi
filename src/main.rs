@@ -149,7 +149,7 @@ fn gumpi_async(
                                 cpus_requested,
                                 config.progname,
                                 config.args,
-                                config.mpiargs,
+                                config.mpiargs.unwrap_or_default(),
                                 deployed,
                             )
                             .context("program execution")

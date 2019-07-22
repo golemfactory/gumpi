@@ -15,7 +15,7 @@ use gu_client::{
     error::Error as GUError,
     model::{
         dockerman::{CreateOptions, NetDef},
-        envman::{Command, CreateSession, ExecOptions, Image, ResourceFormat},
+        envman::{Command, CreateSession, Image, ResourceFormat},
         peers::PeerInfo,
         session::HubSessionSpec,
     },
@@ -188,22 +188,44 @@ impl SessionMPI {
         self.providers.iter().map(|p| p.hardware.num_cores()).sum()
     }
 
-    pub fn exec<T: Into<String>>(
+    pub fn exec(
         &self,
         nproc: usize,
-        progname: T,
-        args: Vec<T>,
-        mpiargs: Option<Vec<T>>,
+        progname: String,
+        args: Vec<String>,
+        mpiargs: Vec<String>,
         deployed: bool,
     ) -> impl Future<Item = String, Error = failure::Error> {
         let root = self.root_provider();
+
+        // Step 1: prepare the command line.
+        //
+        // We execute the program on the root provider in the following manner:
+        //      runuser -u mpirun -- mpirun /path/to/executable arg1 arg2
+
         let mut cmdline = vec![];
 
-        if let Some(args) = mpiargs {
-            cmdline.extend(args.into_iter().map(T::into));
-        }
+        // We use runuser to make sure we're not running as root
+        let executable = "runuser".to_owned();
 
-        let progname = progname.into();
+        let runuser_args = vec!["-u", GUMPI_DOCKER_USER, "--"]
+            .into_iter()
+            .map(ToOwned::to_owned);
+        cmdline.extend(runuser_args);
+
+        // ... to call mpirun, first adding gumpi-logic arguments, later the
+        // custom user defined arguments
+        cmdline.push("mpirun".to_owned());
+        cmdline.extend(vec![
+            "-n".to_owned(),
+            nproc.to_string(),
+            "--hostfile".to_owned(),
+            "/hostfile".to_owned(),
+        ]);
+        cmdline.extend(mpiargs);
+
+        // ... then the program name ...
+        //
         // If we've built the sources, we need to give the exact path to the binary
         // Otherwise it's somewhere on the system, so let the user decide
         let progname = if deployed {
@@ -211,16 +233,14 @@ impl SessionMPI {
         } else {
             progname
         };
+        cmdline.push(progname);
 
-        cmdline.extend(vec![
-            "-n".to_owned(),
-            nproc.to_string(),
-            "--hostfile".to_owned(),
-            "/hostfile".to_owned(),
-            progname,
-        ]);
-        cmdline.extend(args.into_iter().map(T::into));
+        // Finally the user-defined applicadtion arguments
+        cmdline.extend(args);
+        let cmdline = cmdline;
+        info!("Executing mpirun with args {:?}...", cmdline);
 
+        // Step 2: upload the hostfile and execute the command
         let hostfile = self.hostfile();
         info!("HOSTFILE:\n{}", hostfile);
 
@@ -229,22 +249,17 @@ impl SessionMPI {
             file_path: "hostfile".to_owned(),
         };
 
-        info!("Executing mpirun with args {:?}...", cmdline);
-
         let exec_cmd = Command::Exec {
-            executable: "mpirun".to_owned(),
+            executable,
             args: cmdline,
-            options: ExecOptions {
-                user: GUMPI_DOCKER_USER.to_owned().into(),
-                working_dir: APP_WORKDIR.to_owned().into(),
-            },
+            working_dir: APP_WORKDIR.to_owned().into(),
         };
 
         root.session
             .update(vec![upload_cmd, exec_cmd])
             .map_err(|e| match e {
                 GUError::ProcessingResult(mut outs) => {
-                    // assert_eq!(outs.len(), 2);
+                    assert_eq!(outs.len(), 2);
                     use log::error;
                     error!("Processing error: {:?}", outs);
 
@@ -482,16 +497,12 @@ fn generate_deployment_cmds(blob: Blob, mode: BuildType) -> Vec<Command> {
     };
 
     let mut commands = vec![download_cmd];
-    let options = ExecOptions {
-        user: "mpirun".to_owned().into(),
-        working_dir: APP_SOURCES_PATH.to_owned().into(),
-    };
     let compile_commands = match mode {
         BuildType::Make => {
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
                 args: vec!["-C".to_owned(), APP_SOURCES_PATH.to_owned()],
-                options: options.clone(),
+                working_dir: APP_SOURCES_PATH.to_owned().into(),
             };
             vec![make_cmd]
         }
@@ -504,12 +515,12 @@ fn generate_deployment_cmds(blob: Blob, mode: BuildType) -> Vec<Command> {
                     "-DCMAKE_CXX_COMPILER=mpicxx".to_owned(),
                     "-DCMAKE_BUILD_TYPE=Release".to_owned(),
                 ],
-                options: options.clone(),
+                working_dir: APP_SOURCES_PATH.to_owned().into(),
             };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
                 args: vec![],
-                options: options.clone(),
+                working_dir: APP_SOURCES_PATH.to_owned().into(),
             };
             vec![cmake_cmd, make_cmd]
         }
