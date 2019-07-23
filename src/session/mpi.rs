@@ -277,7 +277,7 @@ impl SessionMPI {
                 // in case of successs, outs should be a vector of length 2,
                 // of form [_, execution_output]
                 // only the latter is interesting to us
-                info!("{:?}", outs);
+                info!("It's ok: {:?}", outs);
                 Ok(outs.swap_remove(1))
             })
     }
