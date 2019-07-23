@@ -21,8 +21,13 @@ pub struct Sources {
     pub mode: BuildType,
 }
 
+fn default_output_location() -> PathBuf {
+    PathBuf::from("/output")
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutputConfig {
+    #[serde(default = "default_output_location")]
     pub source: PathBuf,
     pub target: PathBuf,
 }
