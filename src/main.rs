@@ -1,13 +1,11 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
-mod async_ctrlc;
 mod error;
 mod jobconfig;
 mod session;
 
 use crate::{
-    async_ctrlc::{AsyncCtrlc, CtrlcEvent},
     jobconfig::{JobConfig, Opt},
     session::mpi::SessionMPI,
 };
@@ -21,9 +19,10 @@ use futures::{
 use log::{debug, error, info};
 use std::env;
 use structopt::StructOpt;
+use tokio_ctrlc_error::{AsyncCtrlc, KeyboardInterrupt};
 
 fn show_error(e: &failure::Error) {
-    match e.find_root_cause().downcast_ref::<CtrlcEvent>() {
+    match e.find_root_cause().downcast_ref::<KeyboardInterrupt>() {
         Some(_) => eprintln!("Execution interrupted..."),
         None => {
             eprint!("Error");
@@ -86,7 +85,8 @@ fn gumpi_async(
     }
 
     let future = SessionMPI::init(opt.hub, prov_filter)
-        .handle_ctrlc()
+        .ctrlc_as_error() // This is not a bug - we have a second `.ctrlc_as_error()`
+        // inside the `and_then`
         .context("initializing session")
         .and_then(move |session| {
             use std::rc::Rc;
@@ -163,7 +163,7 @@ fn gumpi_async(
                             Either::B(future::ok(()))
                         }
                     })
-                    .handle_ctrlc()
+                    .ctrlc_as_error()
                     .then(move |fut| {
                         // At this point, there should be no other session references
                         // remaining. If it isn't so, we want to stay on the safe side
