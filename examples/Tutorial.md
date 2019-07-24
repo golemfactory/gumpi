@@ -36,9 +36,17 @@ args = ["4", "3", "12000", "10"]
 
 Now we execute the task using gumpi:
 ```
-cargo run -- -h 127.0.0.1:61622 --job examples/game-life.toml -n 12
+cargo run -- -h 127.0.0.1:61622 --job examples/game-life.toml -n 12 -t 1
 ```
+Here `-t 1` means that we want one CPU assigned to each MPI process. For multi-level
+parallel applications (such as MPI+OpenMP) you can use `-t N` to indicate
+the number of threads you want to know.
 
+Please note that this option **doesn't influence the actual number of
+threads used by the app**, but only the assignment, i.e. how the processes are
+distributed across the nodes. You need to
+configure the desired number of threads during the program runtime, e.g. using
+`omp_set_num_threads`.
 # Build system-specific notes
 ## CMake
 Using CMake is failsafe when it comes to the location of the resulting binary -

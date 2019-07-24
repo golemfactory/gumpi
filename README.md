@@ -13,11 +13,13 @@ gumpi requires at least OpenMPI 3.0 on the provider machine. Since the current L
 
 # Example usage
 
-If the hub listens at `127.0.0.1:61622` and you want to spawn `12` processes, enter `gumpi` project root, execute:
+If the hub listens at `127.0.0.1:61622` and you want to spawn `12` processes, with `2` cores assigned per process,
+enter `gumpi` project root, execute:
 ```
-cargo run -- --hub 127.0.0.1:61622 --job job.toml -n 12
+cargo run -- --hub 127.0.0.1:61622 --job job.toml -n 12 -t 2
 ```
 
+Note that this doesn't autoconfigure OpenMP threads.
 See the command line help for more information about the parameters
 
 Example job config (`job.toml` from the example) which will show the hostname for every process on every node:

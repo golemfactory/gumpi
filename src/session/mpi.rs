@@ -5,7 +5,7 @@ use crate::{
     session::gu_client_ext::PeerHardwareQuery,
 };
 use actix_web::{client, HttpMessage};
-use failure::{format_err, ResultExt};
+use failure::{format_err, Fallible, ResultExt};
 use failure_ext::{FutureExt, OptionExt};
 use futures::{
     future::{self, Either},
@@ -35,6 +35,16 @@ pub struct ProviderMPI {
     session: PeerSession,
     hardware: Hardware,
     info: PeerInfo,
+}
+
+impl ProviderMPI {
+    fn num_cores(&self) -> usize {
+        self.hardware.num_cores()
+    }
+
+    fn node_id(&self) -> NodeId {
+        self.info.node_id
+    }
 }
 
 pub struct SessionMPI {
@@ -152,36 +162,50 @@ impl SessionMPI {
         self.providers.first().expect("no providers")
     }
 
-    pub fn hostfile(&self) -> String {
-        let peers = &self.providers;
-        let file_lines: Vec<_> = peers
+    /// Creates a hostfile for all connected providers
+    pub fn hostfile(&self, threads_per_proc: usize) -> Fallible<String> {
+        let mut peers: Vec<&ProviderMPI> = self.providers.iter().collect();
+        // The sort will become unnecessary once golem-unlimited gets
+        // some scheduling capabilities.
+        peers.sort_unstable_by_key(|peer| peer.num_cores());
+        let file_lines: Fallible<Vec<_>> = peers
             .iter()
             .map(|peer| {
-                let ip_sock = &peer.info.peer_addr;
-                let ip_sock: SocketAddr = ip_sock
-                    .parse()
-                    .unwrap_or_else(|_| panic!("GU returned an invalid IP address, {}", ip_sock));
-                let ip = ip_sock.ip();
+                let ip = {
+                    let ip_sock = &peer.info.peer_addr;
+                    let ip_sock: SocketAddr = ip_sock.parse().map_err(|e| {
+                        format_err!("GU returned an invalid IP address: {}: {}", ip_sock, e)
+                    })?;
+                    ip_sock.ip()
+                };
                 let cpus = peer.hardware.num_cores();
+                let slots = cpus / threads_per_proc;
+                if slots * threads_per_proc != cpus {
+                    warn!("Peer {:?}: not all cpus allocated", peer.node_id())
+                }
 
-                format!("{} port=4222 slots={}", ip, cpus)
+                Ok(format!("{} port=4222 slots={}", ip, slots))
             })
             .collect();
-        file_lines.join("\n")
+        Ok(file_lines?.join("\n"))
     }
 
-    pub fn total_cpus(&self) -> usize {
-        self.providers.iter().map(|p| p.hardware.num_cores()).sum()
+    pub fn total_slots(&self, threads_per_proc: usize) -> usize {
+        self.providers
+            .iter()
+            .map(|p| p.hardware.num_cores() / threads_per_proc)
+            .sum()
     }
 
     pub fn exec<T: Into<String>>(
         &self,
         nproc: usize,
+        nthreads: usize,
         progname: T,
         args: Vec<T>,
         mpiargs: Option<Vec<T>>,
         deploy_prefix: Option<String>,
-    ) -> impl Future<Item = String, Error = failure::Error> {
+    ) -> Fallible<impl Future<Item = String, Error = failure::Error>> {
         let root = self.root_provider();
         let mut cmdline = vec![];
 
@@ -203,7 +227,7 @@ impl SessionMPI {
         ]);
         cmdline.extend(args.into_iter().map(T::into));
 
-        let hostfile = self.hostfile();
+        let hostfile = self.hostfile(nthreads)?;
         info!("HOSTFILE:\n{}", hostfile);
 
         let upload_cmd = Command::WriteFile {
@@ -218,7 +242,8 @@ impl SessionMPI {
             args: cmdline,
         };
 
-        root.session
+        Ok(root
+            .session
             .update(vec![upload_cmd, exec_cmd])
             .map_err(|e| match e {
                 GUError::ProcessingResult(mut outs) => {
@@ -236,7 +261,7 @@ impl SessionMPI {
                 // outs should be a vector of length 2, of form ["OK", execution_output]
                 // only the latter is interesting to us
                 Ok(outs.swap_remove(1))
-            })
+            }))
     }
 
     /// Returns: the deployment prefix

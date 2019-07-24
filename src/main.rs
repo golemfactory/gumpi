@@ -55,7 +55,9 @@ fn gumpi_async(
     config: JobConfig,
 ) -> Fallible<impl Future<Item = (), Error = failure::Error>> {
     let progname = config.progname.clone();
-    let cpus_requested = opt.numproc;
+    let numproc = opt.numproc;
+    let numthreads = opt.numthreads;
+    let slots_requested = opt.numproc; // TODO this has to be adapted when we allow threads
     let prov_filter = if opt.providers.is_empty() {
         None
     } else {
@@ -94,13 +96,15 @@ fn gumpi_async(
             let session = Rc::new(session);
             let mut session_clone = Rc::clone(&session);
 
-            info!("available cores: {}", session.total_cpus());
-            let cpus_available = session.total_cpus();
-            if cpus_available < cpus_requested {
+            let slots_available = session.total_slots(numthreads);
+            info!("available slots: {}", slots_available);
+            if slots_available < slots_requested {
                 return Either::A(future::err(format_err!(
-                    "Not enough CPUs available: requested: {}, available: {}",
-                    cpus_requested,
-                    cpus_available
+                    "Not enough slots available: requested: {}, available: {}. \
+                     One slot corresponds to {} CPUs",
+                    slots_requested,
+                    slots_available,
+                    numthreads
                 )));
             }
             info!("Compiling the sources...");
@@ -145,12 +149,15 @@ fn gumpi_async(
                     .and_then(move |(deploy_prefix, ())| {
                         session
                             .exec(
-                                cpus_requested,
+                                numproc,
+                                numthreads,
                                 config.progname,
                                 config.args,
                                 config.mpiargs,
                                 deploy_prefix,
                             )
+                            .into_future() // Result<Future<...>> into Future<Future<...>>
+                            .flatten()
                             .context("program execution")
                             .join(future::ok(session))
                     })
@@ -167,10 +174,10 @@ fn gumpi_async(
                         // At this point, there should be no other session references
                         // remaining. If it isn't so, we want to stay on the safe side
                         // and will not attempt to cleanup.
-                        info!("Cleaning up");
                         let cleanup = if noclean {
                             Either::A(future::ok(()))
                         } else {
+                            info!("Cleaning up");
                             match Rc::get_mut(&mut session_clone) {
                                 Some(sess) => Either::B(sess.close().from_err()),
                                 None => Either::A(future::err(format_err!(

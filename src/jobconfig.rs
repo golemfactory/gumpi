@@ -59,8 +59,14 @@ impl JobConfig {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "gumpi", about = "MPI on Golem Unlimited")]
 pub struct Opt {
-    #[structopt(short = "n", long = "numproc")]
+    #[structopt(short = "n", long = "numproc", help = "number of MPI processes")]
     pub numproc: usize,
+    #[structopt(
+        short = "t",
+        long = "numthreads",
+        help = "number of threads per process"
+    )]
+    pub numthreads: usize,
     #[structopt(short = "h", long = "hub")]
     pub hub: SocketAddr,
     #[structopt(short = "j", long = "job")]
