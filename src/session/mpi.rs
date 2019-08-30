@@ -90,7 +90,16 @@ impl SessionMPI {
             note: None,
             options: CreateOptions {
                 autostart: true,
+                // We need --network=host to get connectivity between containers,
+                // OpenMPI uses high ports for inter-node communication
                 net: Some(NetDef::Host {}),
+                // The vader shared memory transport in OpenMPI uses
+                //     * process_vm_readv
+                //     * process_vm_writev
+                // to ensure single copy. These syscalls are disabled in the default Docker
+                // seccomp profile and can be enabled by the `SYS_PTRACE` capability
+                // cf. https://github.com/open-mpi/ompi/issues/4948
+                cap_add: vec!["SYS_PTRACE".to_owned()],
                 ..CreateOptions::default()
             },
         };
@@ -277,7 +286,6 @@ impl SessionMPI {
                 // in case of successs, outs should be a vector of length 2,
                 // of form [_, execution_output]
                 // only the latter is interesting to us
-                info!("It's ok: {:?}", outs);
                 Ok(outs.swap_remove(1))
             })
     }
