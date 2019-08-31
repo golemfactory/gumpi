@@ -5,16 +5,16 @@ use crate::{
     session::gu_client_ext::PeerHardwareQuery,
 };
 use actix_web::{client, HttpMessage};
-use failure::{format_err, ResultExt};
+use failure::{format_err, Fallible, ResultExt};
 use failure_ext::{FutureExt, OptionExt};
 use futures::{
     future::{self, Either},
     prelude::*,
 };
-use gu_client::error::Error as GUError;
-
 use gu_client::{
+    error::Error as GUError,
     model::{
+        dockerman::{CreateOptions, NetDef},
         envman::{Command, CreateSession, Image, ResourceFormat},
         peers::PeerInfo,
         session::HubSessionSpec,
@@ -42,8 +42,17 @@ pub struct SessionMPI {
     hub_session: HubSession,
 }
 
-const GUMPI_IMAGE_URL: &str = "http://52.31.143.91/dav/gumpi-image.hdi";
-const GUMPI_IMAGE_SHA1: &str = "e50575bb61c20b716e89a307264bdb6e5e981919";
+const GUMPI_IMAGE_NAME: &str = "marmistrz/gumpi";
+const GUMPI_IMAGE_VERSION: &str = "0.0.3";
+const GUMPI_IMAGE_CHECKSUM: &str =
+    "sha256:285b81248af0b9e0f11cfde12edc3cb149b1b74afceb43b6fea8c662d78aeaaa";
+const GUMPI_ENV_TYPE: &str = "docker";
+
+const GUMPI_DOCKER_USER: &str = "mpirun";
+
+const APP_SOURCES_PATH: &str = "/app";
+const APP_INPUT_PATH: &str = "/input";
+const APP_WORKDIR: &str = "/output";
 
 impl SessionMPI {
     pub fn init(
@@ -69,16 +78,30 @@ impl SessionMPI {
         let hub_session = hub_conn.new_session(HubSessionSpec::default());
         let peers = hub_conn.list_peers();
 
+        let docker_image = format!("{}:{}", GUMPI_IMAGE_NAME, GUMPI_IMAGE_VERSION);
         let peer_session_spec = CreateSession {
-            env_type: "hd".to_owned(),
+            env_type: GUMPI_ENV_TYPE.to_owned(),
             image: Image {
-                url: GUMPI_IMAGE_URL.to_owned(),
-                hash: format!("SHA1:{}", GUMPI_IMAGE_SHA1),
+                url: docker_image,
+                hash: GUMPI_IMAGE_CHECKSUM.to_owned(),
             },
             name: "gumpi".to_owned(),
             tags: vec![],
             note: None,
-            options: (),
+            options: CreateOptions {
+                autostart: true,
+                // We need --network=host to get connectivity between containers,
+                // OpenMPI uses high ports for inter-node communication
+                net: Some(NetDef::Host {}),
+                // The vader shared memory transport in OpenMPI uses
+                //     * process_vm_readv
+                //     * process_vm_writev
+                // to ensure single copy. These syscalls are disabled in the default Docker
+                // seccomp profile and can be enabled by the `SYS_PTRACE` capability
+                // cf. https://github.com/open-mpi/ompi/issues/4948
+                cap_add: vec!["SYS_PTRACE".to_owned()],
+                ..CreateOptions::default()
+            },
         };
 
         Either::B(hub_session.join(peers).context("adding peers").and_then(
@@ -174,35 +197,59 @@ impl SessionMPI {
         self.providers.iter().map(|p| p.hardware.num_cores()).sum()
     }
 
-    pub fn exec<T: Into<String>>(
+    pub fn exec(
         &self,
         nproc: usize,
-        progname: T,
-        args: Vec<T>,
-        mpiargs: Option<Vec<T>>,
-        deploy_prefix: Option<String>,
+        progname: String,
+        args: Vec<String>,
+        mpiargs: Vec<String>,
+        deployed: bool,
     ) -> impl Future<Item = String, Error = failure::Error> {
         let root = self.root_provider();
+
+        // Step 1: prepare the command line.
+        //
+        // We execute the program on the root provider in the following manner:
+        //      runuser -u mpirun -- mpirun /path/to/executable arg1 arg2
+
         let mut cmdline = vec![];
 
-        if let Some(args) = mpiargs {
-            cmdline.extend(args.into_iter().map(T::into));
-        }
+        // We use runuser to make sure we're not running as root
+        let executable = "runuser".to_owned();
 
-        // We've moved the executable to /tmp in deploy, so now correct the path
-        // to reflect this change.
-        let progname = progname.into();
-        let progname = deploy_prefix.map(|p| p + &progname).unwrap_or(progname);
+        let runuser_args = vec!["-u", GUMPI_DOCKER_USER, "--"]
+            .into_iter()
+            .map(ToOwned::to_owned);
+        cmdline.extend(runuser_args);
 
+        // ... to call mpirun, first adding gumpi-logic arguments, later the
+        // custom user defined arguments
+        cmdline.push("mpirun".to_owned());
         cmdline.extend(vec![
             "-n".to_owned(),
             nproc.to_string(),
             "--hostfile".to_owned(),
-            "hostfile".to_owned(),
-            progname,
+            "/hostfile".to_owned(),
         ]);
-        cmdline.extend(args.into_iter().map(T::into));
+        cmdline.extend(mpiargs);
 
+        // ... then the program name ...
+        //
+        // If we've built the sources, we need to give the exact path to the binary
+        // Otherwise it's somewhere on the system, so let the user decide
+        let progname = if deployed {
+            format!("{}/{}", APP_SOURCES_PATH, progname)
+        } else {
+            progname
+        };
+        cmdline.push(progname);
+
+        // Finally the user-defined applicadtion arguments
+        cmdline.extend(args);
+        let cmdline = cmdline;
+        info!("Executing mpirun with args {:?}...", cmdline);
+
+        // Step 2: upload the hostfile and execute the command
         let hostfile = self.hostfile();
         info!("HOSTFILE:\n{}", hostfile);
 
@@ -211,11 +258,10 @@ impl SessionMPI {
             file_path: "hostfile".to_owned(),
         };
 
-        info!("Executing mpirun with args {:?}...", cmdline);
-
         let exec_cmd = Command::Exec {
-            executable: "mpirun".to_owned(),
+            executable,
             args: cmdline,
+            working_dir: APP_WORKDIR.to_owned().into(),
         };
 
         root.session
@@ -223,8 +269,12 @@ impl SessionMPI {
             .map_err(|e| match e {
                 GUError::ProcessingResult(mut outs) => {
                     assert_eq!(outs.len(), 2);
+                    use log::error;
+                    error!("Processing error: {:?}", outs);
 
-                    if outs[0] == "OK" {
+                    // This is awful and hacky, but GU is inconsistent
+                    // see https://github.com/golemfactory/gumpi/issues/52
+                    if outs[0].contains("OK") {
                         Error::ExecutionError(outs.swap_remove(1)).into()
                     } else {
                         format_err!("WriteFile failed: {}", outs[0])
@@ -233,10 +283,18 @@ impl SessionMPI {
                 x => x.into(),
             })
             .and_then(|mut outs| {
-                // outs should be a vector of length 2, of form ["OK", execution_output]
+                // in case of successs, outs should be a vector of length 2,
+                // of form [_, execution_output]
                 // only the latter is interesting to us
                 Ok(outs.swap_remove(1))
             })
+    }
+
+    fn get_deployments(&self) -> Vec<PeerSession> {
+        self.providers
+            .iter()
+            .map(|provider| provider.session.clone())
+            .collect()
     }
 
     /// Returns: the deployment prefix
@@ -251,21 +309,15 @@ impl SessionMPI {
         &self,
         config_path: PathBuf,
         sources: Sources,
-        progname: String,
     ) -> impl Future<Item = DeploymentInfo, Error = failure::Error> {
-        let app_path = "app".to_owned();
         let tarball_path = config_path.join(&sources.path);
 
-        let deployments: Vec<_> = self
-            .providers
-            .iter()
-            .map(|provider| provider.session.clone())
-            .collect();
+        let deployments: Vec<_> = self.get_deployments();
 
         self.upload_to_hub(&tarball_path)
             .context("uploading the source tarball")
             .and_then(move |blob| {
-                let cmds = generate_deployment_cmds(app_path, blob, progname, sources.mode);
+                let cmds = generate_deployment_cmds(blob, sources.mode);
                 info!("Building the application on provider nodes");
                 debug!("Executing the following build commands: {:#?}", cmds);
                 let build_futs = deployments
@@ -287,12 +339,7 @@ impl SessionMPI {
                     })
                     .collect::<Vec<_>>();
 
-                future::join_all(build_futs).and_then(|logs| {
-                    Ok(DeploymentInfo {
-                        logs,
-                        deploy_prefix: "/tmp/".to_owned(),
-                    })
-                })
+                future::join_all(build_futs).and_then(|logs| Ok(DeploymentInfo { logs }))
             })
     }
 
@@ -314,7 +361,7 @@ impl SessionMPI {
         &self,
         input_tarball: PathBuf,
     ) -> impl Future<Item = (), Error = failure::Error> {
-        let root_session = self.root_provider().session.clone();
+        let deployments = self.get_deployments();
         let name = input_tarball
             .file_name()
             .ok_or_else(|| format_err!("input_tarball is not a file"))
@@ -334,9 +381,12 @@ impl SessionMPI {
                 let download_cmd = Command::DownloadFile {
                     format: ResourceFormat::Tar,
                     uri: blob.uri(),
-                    file_path: "".to_owned(),
+                    file_path: APP_INPUT_PATH.to_owned(),
                 };
-                root_session.update(vec![download_cmd]).from_err()
+                let futures = deployments
+                    .into_iter()
+                    .map(move |session| session.update(vec![download_cmd.clone()]).from_err());
+                future::join_all(futures)
             })
             .and_then(|_| Ok(()))
     }
@@ -396,11 +446,49 @@ impl SessionMPI {
                     .map_err(Into::into)
             })
     }
+
+    pub fn deploy_keys(&self) -> Fallible<impl Future<Item = (), Error = failure::Error>> {
+        info!("Deploying the keys");
+
+        let (privkey, pubkey) = generate_keypair().context("generating SSH keys")?;
+
+        let privkey_path = format!("home/{}/.ssh/id_rsa", GUMPI_DOCKER_USER);
+        let pubkey_path = format!("home/{}/.ssh/id_rsa.pub", GUMPI_DOCKER_USER);
+        let authorized_keys_path = format!("home/{}/.ssh/authorized_keys", GUMPI_DOCKER_USER);
+
+        let cmds = vec![
+            Command::WriteFile {
+                content: privkey,
+                file_path: privkey_path,
+            },
+            Command::WriteFile {
+                content: pubkey.clone(),
+                file_path: pubkey_path,
+            },
+            Command::WriteFile {
+                content: pubkey,
+                file_path: authorized_keys_path,
+            },
+        ];
+
+        let futs = self
+            .get_deployments()
+            .into_iter()
+            .map(move |session| session.update(cmds.clone()));
+        let ret = future::join_all(futs)
+            .map(|_| ())
+            .map_err(|e| -> failure::Error {
+                match e {
+                    GUError::ProcessingResult(outs) => Error::KeyDeploymentError(outs).into(),
+                    x => x.into(),
+                }
+            });
+        Ok(ret)
+    }
 }
 
 pub struct DeploymentInfo {
     pub logs: Vec<CompilationInfo>,
-    pub deploy_prefix: String,
 }
 
 #[derive(Debug)]
@@ -409,57 +497,60 @@ pub struct CompilationInfo {
     pub logs: Vec<String>,
 }
 
-/// app_path: the directory where the app sources should reside
-///             on the provider side
-fn generate_deployment_cmds(
-    app_path: String,
-    blob: Blob,
-    progname: String,
-    mode: BuildType,
-) -> Vec<Command> {
+fn generate_deployment_cmds(blob: Blob, mode: BuildType) -> Vec<Command> {
     let download_cmd = Command::DownloadFile {
         format: ResourceFormat::Tar,
         uri: blob.uri(),
-        file_path: app_path.clone(),
+        file_path: APP_SOURCES_PATH.to_owned(),
     };
 
-    // If we create a session per provider, every session
-    // gets a unique identifier. This means that the resulting executable
-    // resides in a different directory on each of the provider nodes,
-    // which causes mpirun to fail.
-    // As a workaround, we provide a symlink to the /tmp directory
-    // in the image and put the resulting binary there.
-
-    // For the CMake backend we use the EXECUTABLE_OUTPUT_PATH CMake variable
-    // For the Make backend we just move the file around
-    match mode {
+    let mut commands = vec![download_cmd];
+    let compile_commands = match mode {
         BuildType::Make => {
-            let mv_cmd = Command::Exec {
-                executable: "mv".to_owned(),
-                args: vec![[app_path, progname].join("/"), "tmp/".to_owned()],
-            };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
-                args: vec!["-C".to_owned(), "app".to_owned()],
+                args: vec!["-C".to_owned(), APP_SOURCES_PATH.to_owned()],
+                working_dir: APP_SOURCES_PATH.to_owned().into(),
             };
-            vec![download_cmd, make_cmd, mv_cmd]
+            vec![make_cmd]
         }
         BuildType::CMake => {
             let cmake_cmd = Command::Exec {
-                executable: "cmake/bin/cmake".to_owned(),
+                executable: "cmake".to_owned(),
                 args: vec![
-                    app_path.clone(),
+                    ".".to_owned(),
                     "-DCMAKE_C_COMPILER=mpicc".to_owned(),
                     "-DCMAKE_CXX_COMPILER=mpicxx".to_owned(),
                     "-DCMAKE_BUILD_TYPE=Release".to_owned(),
-                    "-DEXECUTABLE_OUTPUT_PATH=tmp".to_owned(),
                 ],
+                working_dir: APP_SOURCES_PATH.to_owned().into(),
             };
             let make_cmd = Command::Exec {
                 executable: "make".to_owned(),
                 args: vec![],
+                working_dir: APP_SOURCES_PATH.to_owned().into(),
             };
-            vec![download_cmd, cmake_cmd, make_cmd]
+            vec![cmake_cmd, make_cmd]
         }
-    }
+    };
+    commands.extend(compile_commands);
+    commands
+}
+
+fn generate_keypair() -> Fallible<(String, String)> {
+    use openssh_keys::PublicKey;
+    use openssl::rsa::Rsa;
+    const SSH_RSA_KEYSIZE: u32 = 4096;
+
+    let rsa = Rsa::generate(SSH_RSA_KEYSIZE)?;
+    let privkey = rsa.private_key_to_pem()?;
+    let privkey = String::from_utf8(privkey)?;
+
+    let e = rsa.e().to_vec();
+    let n = rsa.n().to_vec();
+    let mut pubkey = PublicKey::from_rsa(e, n);
+    pubkey.set_comment("gumpi");
+    let pubkey = pubkey.to_key_format();
+
+    Ok((privkey, pubkey))
 }

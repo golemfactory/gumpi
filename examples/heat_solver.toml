@@ -1,7 +1,7 @@
 # the name of the binary that will be produced
 progname = "heat_solver"
 # the command line arguments that should be passed to the program
-args = ["--size", "480", "--initial", "input.txt", "--noresults"]
+args = ["--size", "480", "--initial", "/input/input.txt", "--noresults"]
 # (optional) extra arguments that should be passed to mpirun
 # mpiargs = ["--mca", "btl_tcp_if_include", "10.30.8.0/22"]
 
@@ -27,6 +27,8 @@ source = "heat_solver_input.tar"
 # [output]
 # the path to the directory on the PROVIDER node containing the relevant output,
 # relatively to the application working directory
+#
+# Defaults to: /output
 # source = "output"
 
 # desired path to the file containing the outputs from the provider,

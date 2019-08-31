@@ -3,13 +3,7 @@ CircleCI status: [![status](https://circleci.com/gh/golemfactory/gumpi.svg?style
 
 Known to work with [this GU version](https://github.com/golemfactory/golem-unlimited/tree/gumpi-freeze), commit 93c9f37e1765ad743a6b16209561e6374fb88e84.
 
-Minimum supported version:
-* Rust: 1.33
-* OpenMPI: 3.0
-
-# Docker image
-
-gumpi requires at least OpenMPI 3.0 on the provider machine. Since the current LTS version of Ubuntu only has OpenMPI 2.x, you can find a compatible Docker image [here](https://github.com/marmistrz/docker-openmpi).
+Minimum supported Rust version: 1.34
 
 # Example usage
 
@@ -28,6 +22,15 @@ args = ["-a"]
 ```
 
 See [examples/Tutorial.md](examples/Tutorial.md) for a more details.
+
+# Directories inside the Docker image
+The structure of the directories:
+* `/app` contains the sources and the built binary of the application
+* `/input` contains the uploaded input data
+* `/output` is the working directory of the app
+
+In particular, when providing input data, you should refer to it as either
+`../input/file.dat` or `/input/file.dat`.
 
 # Known issues and limitations
 ## Connectivity

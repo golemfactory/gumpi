@@ -1,15 +1,13 @@
 #![warn(clippy::all)]
 #![warn(rust_2018_idioms)]
 
-mod async_ctrlc;
 mod error;
 mod jobconfig;
 mod session;
 
 use crate::{
-    async_ctrlc::{AsyncCtrlc, CtrlcEvent},
     jobconfig::{JobConfig, Opt},
-    session::mpi::{DeploymentInfo, SessionMPI},
+    session::mpi::SessionMPI,
 };
 use actix::prelude::*;
 use failure::{format_err, Fallible, ResultExt};
@@ -21,9 +19,10 @@ use futures::{
 use log::{debug, error, info};
 use std::env;
 use structopt::StructOpt;
+use tokio_ctrlc_error::{AsyncCtrlc, KeyboardInterrupt};
 
 fn show_error(e: &failure::Error) {
-    match e.find_root_cause().downcast_ref::<CtrlcEvent>() {
+    match e.find_root_cause().downcast_ref::<KeyboardInterrupt>() {
         Some(_) => eprintln!("Execution interrupted..."),
         None => {
             eprint!("Error");
@@ -54,7 +53,6 @@ fn gumpi_async(
     opt: Opt,
     config: JobConfig,
 ) -> Fallible<impl Future<Item = (), Error = failure::Error>> {
-    let progname = config.progname.clone();
     let cpus_requested = opt.numproc;
     let prov_filter = if opt.providers.is_empty() {
         None
@@ -87,7 +85,8 @@ fn gumpi_async(
     }
 
     let future = SessionMPI::init(opt.hub, prov_filter)
-        .handle_ctrlc()
+        .ctrlc_as_error() // This is not a bug - we have a second `.ctrlc_as_error()`
+        // inside the `and_then`
         .context("initializing session")
         .and_then(move |session| {
             use std::rc::Rc;
@@ -104,20 +103,16 @@ fn gumpi_async(
                 )));
             }
             info!("Compiling the sources...");
-            // deploy_prefix is the location of the folder, where the executable
-            // resides. See the documentation for SessionMPI::deploy for more
-            // details
-            let deploy_prefix = if let Some(sources) = config.sources.clone() {
+            // impl Future<Item = bool>
+            // * `true` if we have compiled the sources on the provider node
+            // * `false` otherwise
+            let deploy_future = if let Some(sources) = config.sources.clone() {
                 Either::A(
                     session
-                        .deploy(jobconfig_dir.clone(), sources, progname)
+                        .deploy(jobconfig_dir.clone(), sources)
                         .context("deploying the sources")
                         .and_then(|depl| {
-                            let DeploymentInfo {
-                                logs,
-                                deploy_prefix,
-                            } = depl;
-                            for comp in logs {
+                            for comp in depl.logs {
                                 let logs = comp.logs.join("\n------------------\n");
                                 info!(
                                     "Provider {} compilation output:\n{}",
@@ -125,11 +120,11 @@ fn gumpi_async(
                                     logs
                                 );
                             }
-                            Ok(Some(deploy_prefix))
+                            Ok(true)
                         }),
                 )
             } else {
-                Either::B(future::ok(None))
+                Either::B(future::ok(false))
             };
 
             let upload_input = if let Some(input) = config.input.clone() {
@@ -139,17 +134,23 @@ fn gumpi_async(
                 Either::B(future::ok(()))
             };
 
+            let deploy_keys = session
+                .deploy_keys()
+                .into_future()
+                .flatten()
+                .context("deploying SSH keys");
+
             Either::B(
-                deploy_prefix
-                    .join(upload_input)
-                    .and_then(move |(deploy_prefix, ())| {
+                deploy_future
+                    .join3(upload_input, deploy_keys)
+                    .and_then(move |(deployed, (), ())| {
                         session
                             .exec(
                                 cpus_requested,
                                 config.progname,
                                 config.args,
-                                config.mpiargs,
-                                deploy_prefix,
+                                config.mpiargs.unwrap_or_default(),
+                                deployed,
                             )
                             .context("program execution")
                             .join(future::ok(session))
@@ -162,7 +163,7 @@ fn gumpi_async(
                             Either::B(future::ok(()))
                         }
                     })
-                    .handle_ctrlc()
+                    .ctrlc_as_error()
                     .then(move |fut| {
                         // At this point, there should be no other session references
                         // remaining. If it isn't so, we want to stay on the safe side
