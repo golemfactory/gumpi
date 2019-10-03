@@ -429,7 +429,8 @@ impl SessionMPI {
                     .and_then(|response| {
                         let status = response.status();
                         if status.is_success() {
-                            Either::A(response.body().limit(1024 * 1024 * 1024).from_err()) // 1 GiB limit
+                            Either::A(response.body().limit(1024 * 1024 * 1024).from_err())
+                        // 1 GiB limit
                         } else {
                             let err = format_err!("Error downloading the outputs: {}", status);
                             Either::B(future::err(err))
